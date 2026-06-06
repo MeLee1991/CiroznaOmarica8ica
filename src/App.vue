@@ -902,21 +902,8 @@ const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) adminAuth.value
 .kiosk-container.light { --bg-color: #e0e0e0; --panel-bg: #ffffff; --text-color: #222222; --border-color: #cccccc; --input-bg: #f5f5f5; --item-bg: #f9f9f9; }
 
 /* GLOBAL & LAYOUT */
-/* .kiosk-container { display: grid; grid-template-columns: 1.1fr 1.2fr 1.1fr; height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box; } */
-/* .panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; overflow-y: auto; border: 1px solid var(--border-color); } */
-.kiosk-container {
-  /* To prisili brskalnik, da upošteva svojo UI vrstico (dynamic viewport height) */
-  height: 100dvh; 
-  overflow: hidden; 
-}
-
-.panel {
-  /* Dovoli skrolanje znotraj vsakega stolpca */
-  overflow-y: auto; 
-  /* Tukaj je magija: dodamo ogromen prazen prostor na dno, da gumb priplava gor */
-  padding-bottom: 120px !important; 
-}
-
+.kiosk-container { display: grid; grid-template-columns: 1.1fr 1.2fr 1.1fr; height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box;   height: 100dvh; overflow: hidden; }
+.panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; overflow-y: auto; border: 1px solid var(--border-color); overflow-y: auto; padding-bottom: 120px !important; }
 
 h2, h3, h4 { color: var(--text-color); margin-top: 0; }
 h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; text-align: center; }
