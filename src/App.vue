@@ -433,6 +433,14 @@
         </div>
       </div>
     </div>
+
+    <div class="watermark">
+      created by <a href="mailto:deevyezh@gmail.com" class="author-link">Dee-vyezh</a>™
+    </div>
+
+  </div>
+  <div class="watermark">
+      created by <a href="mailto:deevyezh@gmail.com" class="author-link">Dee-vyezh</a>™
   </div>
 </template>
 

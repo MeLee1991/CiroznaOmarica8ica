@@ -316,3 +316,27 @@ code {
 .user-badge { font-size: 10px; color: #aaa; text-transform: uppercase; }
 .user-actions { display: flex; align-items: center; gap: 10px; }
 .debt-warning { color: #ff5252; font-weight: bold; font-size: 13px; }
+
+/* Avtorski žig na dnu zaslona - izboljšana verzija */
+.watermark {
+  position: fixed;
+  bottom: 12px; /* Dvignjeno ravno prav, da ne uide iz zaslona */
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+  z-index: 99999; /* Maksimalen z-index, da gre čez vse elemente */
+  pointer-events: none;
+}
+
+.watermark a.author-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-weight: bold;
+  pointer-events: auto; /* Pomembno, da klik na mail dejansko dela */
+}
+
+.watermark a.author-link:hover {
+  text-decoration: underline; /* Podčrta se samo, ko greš z miško čez (če si na PC-ju) */
+}
