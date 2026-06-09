@@ -109,12 +109,20 @@
       <div v-if="activeUser" class="tab-section">
         <h3>Zapitek: {{ activeUser.ime }}</h3>
         <div class="order-list">
-          <div v-for="o in userCurrentOrders" :key="o.id" class="order-row">
-            <span class="order-name">{{ o.ime }}</span> 
-            <span class="order-price-box">
-              {{ o.cena.toFixed(2) }} € 
-              <button @click="removeOrder(o.id)" class="btn-del-mini" title="Odstrani in vrni v zalogo">✖</button>
-            </span>
+          <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
+            <div class="order-main">
+              <span class="order-name">{{ group.ime }}</span>
+              <span class="order-meta">{{ group.quantity }} × {{ group.cena.toFixed(2) }} €</span>
+            </div>
+            <div class="order-controls">
+              <span class="order-total">{{ group.total.toFixed(2) }} €</span>
+              <template v-if="group.isDrink">
+                <button @click="addOrderGroupItem(group)" class="btn-qty btn-qty-plus" title="Dodaj še eno in odštej iz zaloge">+</button>
+                <span class="order-qty">{{ group.quantity }}</span>
+                <button @click="removeOrderGroupItem(group)" class="btn-qty btn-qty-minus" title="Odštej eno in vrni v zalogo">−</button>
+              </template>
+              <button @click="removeOrderGroup(group)" class="btn-del-mini" title="Odstrani vrstico in vrni zalogo">✖</button>
+            </div>
           </div>
         </div>
         
@@ -144,19 +152,23 @@
         <!-- DASHBOARD CONTAINER -->
         <div v-else class="admin-dashboard">
           <div class="admin-tabs">
-            <button @click="adminTab = 'artikli'" :class="['tab-btn', { active: adminTab === 'artikli' }]">Urejanje Bifeja</button>
-            <button @click="adminTab = 'inventura'" :class="['tab-btn', { active: adminTab === 'inventura' }]">Inventura</button>
-            <button @click="adminTab = 'mize'" :class="['tab-btn', { active: adminTab === 'mize' }]">Mize & Tarife</button>
-            <button @click="adminTab = 'statistika'" :class="['tab-btn', { active: adminTab === 'statistika' }]">Statistika</button>
-            <button @click="adminTab = 'uporabniki'" :class="['tab-btn', { active: adminTab === 'uporabniki' }]">Igralci</button>
-            <button @click="adminTab = 'izgled'" :class="['tab-btn', { active: adminTab === 'izgled' }]">Izgled</button>
-            <button @click="adminTab = 'baza'" :class="['tab-btn', { active: adminTab === 'baza' }]">Baza</button>
+            <button v-for="tab in adminTabs" :key="tab.id" @click="adminTab = tab.id" :class="['tab-btn', { active: adminTab === tab.id }]">
+              {{ adminTabLabels[tab.id] || tab.fallback }}
+            </button>
           </div>
           
           <div class="admin-scroll">
             
             <!-- TAB: ITEMS -->
             <div v-if="adminTab === 'artikli'">
+              <div class="admin-cat-block add-category-block">
+                <h3>Nova kategorija</h3>
+                <div class="inline-add-row">
+                  <input v-model="newCategoryName" placeholder="Ime kategorije..." class="input-inline name-input" @keyup.enter="addNewCategory">
+                  <button @click="addNewCategory" class="btn-start btn-small">Dodaj kategorijo</button>
+                </div>
+              </div>
+
               <div v-for="cat in uniqueCategories" :key="cat" class="admin-cat-block">
                 <div class="cat-header">
                   <div style="display: flex; align-items: center; gap: 10px;">
@@ -164,53 +176,95 @@
                       <button @click="moveCategory(cat, -1)" class="arrow-btn">▲</button>
                       <button @click="moveCategory(cat, 1)" class="arrow-btn">▼</button>
                     </div>
-                    <h3 style="margin: 0;">{{ cat }}</h3>
+                    <button @click="toggleCategoryFold('artikli', cat)" class="fold-btn" :title="isCategoryFolded('artikli', cat) ? 'Odpri kategorijo' : 'Zapri kategorijo'">
+                      {{ isCategoryFolded('artikli', cat) ? '▸' : '▾' }}
+                    </button>
+                    <input :value="cat" class="input-inline category-name-input" @change="renameCategory(cat, $event.target.value)">
                   </div>
                   <button @click="deleteCategory(cat)" class="btn-del-mini">✖ Briši kat.</button>
                 </div>
-                
-                <div v-for="d in sortedDrinks.filter(x => x.kategorija === cat)" :key="d.id" class="admin-item">
-                  <div class="sort-arrows">
-                    <button @click="moveDrink(d, -1)" class="arrow-btn">▲</button>
-                    <button @click="moveDrink(d, 1)" class="arrow-btn">▼</button>
-                  </div>
-                  <input v-model="d.ime" class="input-inline name-input" @change="updateDrink(d)">
-                  <div class="price-inputs">
-                    <span class="price-label">R:</span><input v-model.number="d.cena" type="number" step="0.1" class="input-inline price-input" @change="updateDrink(d)">
-                    <span class="price-label">Č:</span><input v-model.number="d.cena_clan" type="number" step="0.1" class="input-inline price-input" @change="updateDrink(d)">
-                  </div>
-                  <div class="admin-item-actions"><button @click="deleteDrink(d.id)" class="btn-del-mini">✖</button></div>
-                </div>
 
-                <div class="inline-add-row mt-half">
-                  <input v-model="newDrinkModels[cat].ime" placeholder="Nov artikel..." class="input-inline name-input" @keyup.enter="submitNewDrink(cat)">
-                  <div class="price-inputs">
-                    <span class="price-label">R:</span><input v-model.number="newDrinkModels[cat].cena" type="number" step="0.1" class="input-inline price-input" @keyup.enter="submitNewDrink(cat)">
-                    <span class="price-label">Č:</span><input v-model.number="newDrinkModels[cat].cena_clan" type="number" step="0.1" class="input-inline price-input" @keyup.enter="submitNewDrink(cat)">
+                <div v-show="!isCategoryFolded('artikli', cat)">
+                  <div v-for="d in sortedDrinks.filter(x => x.kategorija === cat)" :key="d.id" class="admin-item">
+                    <div class="sort-arrows">
+                      <button @click="moveDrink(d, -1)" class="arrow-btn">▲</button>
+                      <button @click="moveDrink(d, 1)" class="arrow-btn">▼</button>
+                    </div>
+                    <input v-model="d.ime" class="input-inline name-input" @change="updateDrink(d)">
+                    <div class="price-inputs">
+                      <span class="price-label">R:</span><input v-model.number="d.cena" type="number" step="0.1" class="input-inline price-input" @change="updateDrink(d)">
+                      <span class="price-label">Č:</span><input v-model.number="d.cena_clan" type="number" step="0.1" class="input-inline price-input" @change="updateDrink(d)">
+                    </div>
+                    <div class="admin-item-actions"><button @click="deleteDrink(d.id)" class="btn-del-mini">✖</button></div>
                   </div>
-                  <button @click="submitNewDrink(cat)" class="btn-start btn-small" style="font-size: 16px; width: 40px; padding: 6px;">✔</button>
+
+                  <div class="inline-add-row mt-half">
+                    <input v-model="newDrinkModels[cat].ime" placeholder="Nov artikel..." class="input-inline name-input" @keyup.enter="submitNewDrink(cat)">
+                    <div class="price-inputs">
+                      <span class="price-label">R:</span><input v-model.number="newDrinkModels[cat].cena" type="number" step="0.1" class="input-inline price-input" @keyup.enter="submitNewDrink(cat)">
+                      <span class="price-label">Č:</span><input v-model.number="newDrinkModels[cat].cena_clan" type="number" step="0.1" class="input-inline price-input" @keyup.enter="submitNewDrink(cat)">
+                    </div>
+                    <button @click="submitNewDrink(cat)" class="btn-start btn-small" style="font-size: 16px; width: 40px; padding: 6px;">✔</button>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- TAB: INVENTORY -->
             <div v-if="adminTab === 'inventura'">
+              <div class="market-summary-grid">
+                <div class="market-card"><span>Vrednost zaloge</span><strong>{{ marketSummary.stockValue.toFixed(2) }} €</strong></div>
+                <div class="market-card"><span>Možen profit zaloge</span><strong>{{ marketSummary.potentialProfit.toFixed(2) }} €</strong></div>
+                <div class="market-card"><span>Profit prodaje</span><strong>{{ marketSummary.realizedProfit.toFixed(2) }} €</strong></div>
+              </div>
                <div v-for="cat in uniqueCategories" :key="cat" class="admin-cat-block">
-                <div class="cat-header"><h3>{{ cat }} - Stanje</h3></div>
-                <div v-for="d in sortedDrinks.filter(x => x.kategorija === cat)" :key="d.id" class="admin-item" style="gap: 15px; border-bottom: 1px dashed var(--border-color);">
-                  <div class="name-input" style="font-weight: bold; flex-grow: 1; text-align: left;">{{ d.ime }}</div>
-                  
-                  <div class="inventory-controls" style="display: flex; align-items: center; justify-content: flex-end; gap: 15px;">
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                      <span style="font-size: 11px; color: #888;">Meja:</span>
-                      <input v-model.number="d.min_zaloga" type="number" class="input-inline" style="width: 50px; text-align: center;" @change="updateDrink(d)">
+                <div class="cat-header">
+                  <h3>{{ cat }} - Stanje</h3>
+                  <button @click="toggleCategoryFold('inventura', cat)" class="fold-btn" :title="isCategoryFolded('inventura', cat) ? 'Odpri kategorijo' : 'Zapri kategorijo'">
+                    {{ isCategoryFolded('inventura', cat) ? '▸' : '▾' }}
+                  </button>
+                </div>
+                <div v-show="!isCategoryFolded('inventura', cat)">
+                <div v-for="d in sortedDrinks.filter(x => x.kategorija === cat)" :key="d.id" class="inventory-item">
+                  <div class="inventory-title">
+                    <strong>{{ d.ime }}</strong>
+                  </div>
+
+                  <div class="market-line">
+                    <span><small>{{ ui.inventorySoldLabel }}</small><strong>{{ getMarketRow(d).soldQty }}</strong></span>
+                    <span><small>{{ ui.inventoryProfitLabel }}</small><strong>{{ getMarketRow(d).realizedProfit.toFixed(2) }} €</strong></span>
+                    <span><small>{{ ui.inventoryStockProfitLabel }}</small><strong>{{ getMarketRow(d).potentialProfit.toFixed(2) }} €</strong></span>
+                  </div>
+
+                  <div class="inventory-controls">
+                    <div class="mini-field">
+                      <span>{{ ui.inventoryLimitLabel }}</span>
+                      <input v-model.number="d.min_zaloga" type="number" min="0" max="999" class="input-inline" @change="updateDrink(d)">
                     </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
+                    <div class="stock-stepper">
                       <button @click="adjustStock(d, -1)" class="btn-stock btn-stock-minus">-</button>
-                      <input v-model.number="d.zaloga" type="number" :class="['input-inline', 'stock-input-large', { 'low-stock': d.zaloga <= (d.min_zaloga || 0) }]" @change="updateDrink(d)">
+                      <input v-model.number="d.zaloga" type="number" min="0" max="999" :class="['input-inline', 'stock-input-large', { 'low-stock': d.zaloga <= (d.min_zaloga || 0) }]" @change="updateDrink(d)">
                       <button @click="adjustStock(d, 1)" class="btn-stock btn-stock-plus">+</button>
                     </div>
                   </div>
+
+                  <div v-if="purchaseDrafts[d.id]" class="purchase-row">
+                    <label>
+                      <span>{{ ui.inventoryQtyLabel }}</span>
+                      <input v-model.number="purchaseDrafts[d.id].qty" type="number" min="0" class="input-inline">
+                    </label>
+                    <label>
+                      <span>{{ ui.inventoryBuyLabel }}</span>
+                      <input v-model.number="purchaseDrafts[d.id].buyPrice" type="number" min="0" step="0.01" class="input-inline">
+                    </label>
+                    <label>
+                      <span>{{ ui.inventorySellLabel }}</span>
+                      <input v-model.number="purchaseDrafts[d.id].sellPrice" type="number" min="0" step="0.01" class="input-inline">
+                    </label>
+                    <button @click="recordPurchase(d)" class="btn-start btn-small purchase-save">{{ ui.inventoryAddBuyLabel }}</button>
+                    <button @click="undoLastPurchase(d)" class="btn-warn btn-small purchase-undo" :disabled="!getLastPurchase(d)" :title="getLastPurchase(d) ? 'Razveljavi zadnji nakup' : 'Ni nakupa za razveljaviti'">Undo</button>
+                  </div>
+                </div>
                 </div>
               </div>
             </div>
@@ -254,7 +308,7 @@
               <div class="stats-grid">
                 <div class="stat-card"><h4>Danes</h4><span class="stat-date">{{ getDateLabel('danes') }}</span><div class="stat-value">{{ stats.daily.toFixed(2) }} €</div></div>
                 <div class="stat-card"><h4>Ta teden</h4><span class="stat-date">{{ getDateLabel('teden') }}</span><div class="stat-value">{{ stats.weekly.toFixed(2) }} €</div></div>
-                <div class="stat-card"><h4>Ta mesec</h4><span class="stat-date">{{ getDateLabel('mesec') }}</span><div class="stat-value">{{ stats.monthly.toFixed(2) }} €</div></div>
+                <div class="stat-card"><h4>Izbrani mesec</h4><span class="stat-date">{{ selectedMonthLabel }}</span><div class="stat-value">{{ stats.selectedMonthly.toFixed(2) }} €</div></div>
                 <div class="stat-card"><h4>Letos</h4><span class="stat-date">{{ getDateLabel('leto') }}</span><div class="stat-value">{{ stats.yearly.toFixed(2) }} €</div></div>
               </div>
               
@@ -320,6 +374,33 @@
                   </table>
                 </div>
               </div>
+
+              <div class="admin-cat-block mt-15 market-table-card">
+                <h3>Mini Market ({{ currentFilterLabel }})</h3>
+                <table class="stat-table">
+                  <thead>
+                    <tr>
+                      <th class="market-col-name"><button @click="setMarketSort('ime')" class="sort-header">Artikel <span>{{ marketSortIndicator('ime') }}</span></button></th>
+                      <th class="market-col-center"><button @click="setMarketSort('soldQty')" class="sort-header">Prodano <span>{{ marketSortIndicator('soldQty') }}</span></button></th>
+                      <th class="market-col-center"><button @click="setMarketSort('realizedProfit')" class="sort-header">Profit <span>{{ marketSortIndicator('realizedProfit') }}</span></button></th>
+                      <th class="market-col-center"><button @click="setMarketSort('stockValue')" class="sort-header">Zaloga € <span>{{ marketSortIndicator('stockValue') }}</span></button></th>
+                      <th class="market-col-center"><button @click="setMarketSort('suggestion')" class="sort-header">Akcija <span>{{ marketSortIndicator('suggestion') }}</span></button></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="row in marketRows" :key="row.id">
+                      <td class="market-col-name">{{ row.ime }}</td>
+                      <td class="market-col-center">{{ row.soldQty }}</td>
+                      <td class="market-col-center">{{ row.realizedProfit.toFixed(2) }}</td>
+                      <td class="market-col-center">{{ row.stockValue.toFixed(2) }}</td>
+                      <td class="market-col-center">
+                        <span v-if="row.suggestion" :class="['market-pill', row.suggestionClass]">{{ row.suggestion }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
             </div>
 
             <!-- TAB: PLAYERS -->
@@ -363,6 +444,26 @@
                   <button @click="ui.theme = 'light'" :class="['btn-toggle', { active: ui.theme === 'light' }]">☀️ Svetla</button>
                 </div>
                 <hr style="border-color:var(--border-color); margin:20px 0;">
+                <h3>Imena zavihkov</h3>
+                <div class="tab-name-grid">
+                  <label v-for="tab in adminTabs" :key="tab.id">
+                    <span>{{ tab.fallback }}</span>
+                    <input v-model="adminTabLabels[tab.id]" class="input-inline" @change="saveAdminTabLabels">
+                  </label>
+                </div>
+                <hr style="border-color:var(--border-color); margin:20px 0;">
+                <h3>Žrtve - seznam</h3>
+                <div class="settings-grid">
+                  <label>
+                    <span>Velikost imen</span>
+                    <input v-model="ui.victimFontSize" type="text" class="input-inline">
+                  </label>
+                  <label class="check-row">
+                    <input type="checkbox" v-model="ui.victimBold">
+                    <span>Krepka imena</span>
+                  </label>
+                </div>
+                <hr style="border-color:var(--border-color); margin:20px 0;">
                 <h3>Konfiguracija Mreže Gumbov (Cirozna Omarica)</h3>
                 <div class="inline-add-row mt-15">
                   <label style="width:140px;">Gumbov v vrstici:</label>
@@ -385,6 +486,32 @@
                 <div class="inline-add-row mt-half">
                   <label style="width:140px;">Velikost pisave:</label>
                   <input v-model="ui.fontSize" type="text" class="input-inline" style="width:100px;">
+                </div>
+                <div class="settings-grid mt-half">
+                  <label>
+                    <span>Ime pijače</span>
+                    <input v-model="ui.drinkNameFontSize" type="text" class="input-inline">
+                  </label>
+                  <label>
+                    <span>Cena / znesek</span>
+                    <input v-model="ui.drinkPriceFontSize" type="text" class="input-inline">
+                  </label>
+                  <label class="check-row">
+                    <input type="checkbox" v-model="ui.drinkNameBold">
+                    <span>Krepka imena pijač</span>
+                  </label>
+                </div>
+                <hr style="border-color:var(--border-color); margin:20px 0;">
+                <h3>Inventura - napisi</h3>
+                <div class="settings-grid">
+                  <label><span>Kosov</span><input v-model="ui.inventoryQtyLabel" type="text" class="input-inline"></label>
+                  <label><span>Nabavna</span><input v-model="ui.inventoryBuyLabel" type="text" class="input-inline"></label>
+                  <label><span>Prodajna</span><input v-model="ui.inventorySellLabel" type="text" class="input-inline"></label>
+                  <label><span>Meja</span><input v-model="ui.inventoryLimitLabel" type="text" class="input-inline"></label>
+                  <label><span>Prodano</span><input v-model="ui.inventorySoldLabel" type="text" class="input-inline"></label>
+                  <label><span>Profit</span><input v-model="ui.inventoryProfitLabel" type="text" class="input-inline"></label>
+                  <label><span>Zalog prof.</span><input v-model="ui.inventoryStockProfitLabel" type="text" class="input-inline"></label>
+                  <label><span>Gumb nakupa</span><input v-model="ui.inventoryAddBuyLabel" type="text" class="input-inline"></label>
                 </div>
                 <button @click="saveUISettings" class="btn-start mt-15">Shrani Nastavitve</button>
               </div>
@@ -434,12 +561,8 @@
       </div>
     </div>
 
-    <div class="watermark">
-      created by <a href="mailto:deevyezh@gmail.com" class="author-link">Dee-vyezh</a>™
-    </div>
-
   </div>
-  <div class="watermark">
+  <div v-if="!showAdmin" class="watermark">
       created by <a href="mailto:deevyezh@gmail.com" class="author-link">Dee-vyezh</a>™
   </div>
 </template>
@@ -467,6 +590,18 @@ const activeUser = ref(null)
 const showAdmin = ref(false)
 const adminAuth = ref(false)
 const adminTab = ref('artikli')
+const adminTabs = [
+  { id: 'artikli', fallback: 'Urejanje Bifeja' },
+  { id: 'inventura', fallback: 'Inventura' },
+  { id: 'mize', fallback: 'Mize & Tarife' },
+  { id: 'statistika', fallback: 'Statistika' },
+  { id: 'uporabniki', fallback: 'Igralci' },
+  { id: 'izgled', fallback: 'Izgled' },
+  { id: 'baza', fallback: 'Baza' }
+]
+const defaultAdminTabLabels = adminTabs.reduce((acc, tab) => ({ ...acc, [tab.id]: tab.fallback }), {})
+const adminTabLabels = reactive({ ...defaultAdminTabLabels, ...(JSON.parse(localStorage.getItem('ciroznaAdminTabs')) || {}) })
+const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.stringify(adminTabLabels))
 const passInput = ref('')
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const newCategoryName = ref('')
@@ -480,22 +615,74 @@ const activeFilter = ref('vse')
 const selectedMonth = ref(new Date().getMonth())
 const selectedYear = ref(new Date().getFullYear())
 const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec']
+const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
+const setMarketSort = (key) => {
+  marketSort.value = {
+    key,
+    dir: marketSort.value.key === key && marketSort.value.dir === 'desc' ? 'asc' : 'desc'
+  }
+}
+const marketSortIndicator = (key) => {
+  if (marketSort.value.key !== key) return ''
+  return marketSort.value.dir === 'asc' ? '▲' : '▼'
+}
 
 const newDrinkModels = reactive({})
+const purchaseDrafts = reactive({})
+const inventoryBuys = reactive(JSON.parse(localStorage.getItem('ciroznaInventoryBuys')) || [])
+watch(inventoryBuys, (newVal) => localStorage.setItem('ciroznaInventoryBuys', JSON.stringify(newVal)), { deep: true })
 
-const defaultUI = { theme: 'dark', buttonsPerRow: '2', btnWidth: '100%', btnHeight: '80px', fontSize: '15px', fontColor: '#ffffff', useCatColors: true, btnBgColor: '#3a3a48' }
-const ui = reactive(JSON.parse(localStorage.getItem('ciroznaUI')) || defaultUI)
+const defaultUI = {
+  theme: 'dark',
+  buttonsPerRow: '2',
+  btnWidth: '100%',
+  btnHeight: '80px',
+  fontSize: '15px',
+  fontColor: '#ffffff',
+  useCatColors: true,
+  btnBgColor: '#3a3a48',
+  victimFontSize: '14px',
+  victimBold: true,
+  drinkNameFontSize: '15px',
+  drinkPriceFontSize: '14px',
+  drinkNameBold: true,
+  inventoryQtyLabel: 'Kosov',
+  inventoryBuyLabel: 'Nabavna',
+  inventorySellLabel: 'Prodajna',
+  inventoryLimitLabel: 'Meja',
+  inventorySoldLabel: 'Prodano',
+  inventoryProfitLabel: 'Profit',
+  inventoryStockProfitLabel: 'Zalog prof.',
+  inventoryAddBuyLabel: 'Dodaj nakup'
+}
+const ui = reactive({ ...defaultUI, ...(JSON.parse(localStorage.getItem('ciroznaUI')) || {}) })
+if (ui.inventoryQtyLabel === 'Kupi kosov') ui.inventoryQtyLabel = 'Kosov'
+if (ui.inventoryBuyLabel === 'Nabavna €/kos') ui.inventoryBuyLabel = 'Nabavna'
+if (ui.inventorySellLabel === 'Prodajna €/kos') ui.inventorySellLabel = 'Prodajna'
+if (ui.inventoryStockProfitLabel === 'Zaloga profit') ui.inventoryStockProfitLabel = 'Zalog prof.'
 
 const saveUISettings = () => { localStorage.setItem('ciroznaUI', JSON.stringify(ui)); alert('Nastavitve shranjene!'); }
 
-const customCssVars = computed(() => { return { '--drink-w': ui.btnWidth, '--drink-h': ui.btnHeight, '--drink-fz': ui.fontSize, '--drink-fc': ui.fontColor } })
+const customCssVars = computed(() => {
+  return {
+    '--drink-w': ui.btnWidth,
+    '--drink-h': ui.btnHeight,
+    '--drink-fz': ui.fontSize,
+    '--drink-fc': ui.fontColor,
+    '--victim-fz': ui.victimFontSize,
+    '--victim-fw': ui.victimBold ? '700' : '500',
+    '--drink-name-fz': ui.drinkNameFontSize,
+    '--drink-name-fw': ui.drinkNameBold ? '700' : '500',
+    '--drink-price-fz': ui.drinkPriceFontSize
+  }
+})
 
 const gridStyleConfig = computed(() => {
-  if (ui.buttonsPerRow === 'auto') return { gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }
-  return { gridTemplateColumns: `repeat(${ui.buttonsPerRow}, 1fr)` }
+  if (ui.buttonsPerRow === 'auto') return { gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }
+  return { gridTemplateColumns: `repeat(${ui.buttonsPerRow}, minmax(0, 1fr))` }
 })
 
 const catColors = ['#2c3e50', '#4a2333', '#234a31', '#4a4023', '#23394a', '#3f234a']
@@ -504,10 +691,24 @@ const getCatColor = (catName) => { const index = uniqueCategories.value.indexOf(
 // Robust Category Sorting via LocalStorage
 const catOrder = reactive(JSON.parse(localStorage.getItem('ciroznaCatOrder')) || [])
 watch(catOrder, (newVal) => localStorage.setItem('ciroznaCatOrder', JSON.stringify(newVal)), {deep: true})
+const customCategories = reactive(JSON.parse(localStorage.getItem('ciroznaCustomCategories')) || [])
+watch(customCategories, (newVal) => localStorage.setItem('ciroznaCustomCategories', JSON.stringify(newVal)), {deep: true})
+const foldedCategories = reactive(JSON.parse(localStorage.getItem('ciroznaFoldedCategories')) || [])
+watch(foldedCategories, (newVal) => localStorage.setItem('ciroznaFoldedCategories', JSON.stringify(newVal)), {deep: true})
+
+const categoryFoldKey = (scope, cat) => `${scope}:${cat}`
+const isCategoryFolded = (scope, cat) => foldedCategories.includes(categoryFoldKey(scope, cat))
+const toggleCategoryFold = (scope, cat) => {
+  const key = categoryFoldKey(scope, cat)
+  const index = foldedCategories.indexOf(key)
+  if (index === -1) foldedCategories.push(key)
+  else foldedCategories.splice(index, 1)
+}
 
 const uniqueCategories = computed(() => {
   const dbCats = Array.from(new Set(drinks.value.map(d => d.kategorija)));
-  return dbCats.sort((a, b) => {
+  const cats = Array.from(new Set([...dbCats, ...customCategories])).filter(Boolean)
+  return cats.sort((a, b) => {
     let idxA = catOrder.indexOf(a); let idxB = catOrder.indexOf(b);
     if(idxA === -1) idxA = 999; if(idxB === -1) idxB = 999;
     return idxA - idxB;
@@ -528,7 +729,7 @@ onMounted(async () => {
   const { data: u } = await supabase.from('users').select('*')
   if(u) users.value = u
   const { data: d } = await supabase.from('drinks').select('*').eq('active', true)
-  if(d) { drinks.value = d; initCategoryModels() }
+  if(d) { drinks.value = d; initCategoryModels(); initPurchaseModels() }
   const { data: t } = await supabase.from('tariffs').select('*')
   if(t) tariffs.value = t
   const { data: o } = await supabase.from('orders').select('*')
@@ -550,7 +751,77 @@ const initCategoryModels = () => {
   })
 }
 
+const getLatestBuyPrice = (drink) => {
+  const last = [...inventoryBuys].reverse().find(buy => buy.drinkId === drink.id || buy.drinkName === drink.ime)
+  return last ? Number(last.buyPrice || 0) : 0
+}
+
+const initPurchaseModels = () => {
+  drinks.value.forEach(d => {
+    if (!purchaseDrafts[d.id]) {
+      purchaseDrafts[d.id] = { qty: 0, buyPrice: getLatestBuyPrice(d), sellPrice: Number(d.cena || 0) }
+    } else {
+      purchaseDrafts[d.id].sellPrice = Number(d.cena || 0)
+    }
+  })
+}
+
 const adjustStock = async (drink, amount) => { drink.zaloga += amount; await updateDrink(drink); }
+
+const recordPurchase = async (drink) => {
+  const draft = purchaseDrafts[drink.id]
+  if (!draft) return
+  const qty = Number(draft.qty || 0)
+  const buyPrice = Number(draft.buyPrice || 0)
+  const sellPrice = Number(draft.sellPrice || drink.cena || 0)
+  if (qty <= 0) return alert('Vnesi količino nakupa.')
+  if (buyPrice < 0 || sellPrice < 0) return alert('Cena ne sme biti negativna.')
+
+  const stockBefore = Number(drink.zaloga || 0)
+  const previousSellPrice = Number(drink.cena || 0)
+  drink.zaloga = Number(drink.zaloga || 0) + qty
+  drink.cena = sellPrice
+  await updateDrink(drink)
+  inventoryBuys.push({
+    id: `${Date.now()}-${drink.id}`,
+    drinkId: drink.id,
+    drinkName: drink.ime,
+    qty,
+    buyPrice,
+    sellPrice,
+    stockBefore,
+    previousSellPrice,
+    timestamp: new Date().toISOString()
+  })
+  draft.qty = 0
+}
+
+const getLastPurchase = (drink) => {
+  for (let i = inventoryBuys.length - 1; i >= 0; i--) {
+    const buy = inventoryBuys[i]
+    if (buy.drinkId === drink.id || buy.drinkName === drink.ime) return buy
+  }
+  return null
+}
+
+const undoLastPurchase = async (drink) => {
+  const last = getLastPurchase(drink)
+  if (!last) return
+  if (!confirm(`Razveljavim zadnji nakup za "${drink.ime}" (${last.qty} kosov)?`)) return
+  const index = inventoryBuys.findIndex(buy => buy.id === last.id)
+  if (index === -1) return
+
+  drink.zaloga = Number.isFinite(Number(last.stockBefore))
+    ? Number(last.stockBefore)
+    : Math.max(0, Number(drink.zaloga || 0) - Number(last.qty || 0))
+  if (Number.isFinite(Number(last.previousSellPrice))) drink.cena = Number(last.previousSellPrice)
+  await updateDrink(drink)
+  inventoryBuys.splice(index, 1)
+  if (purchaseDrafts[drink.id]) {
+    purchaseDrafts[drink.id].buyPrice = getLatestBuyPrice(drink)
+    purchaseDrafts[drink.id].sellPrice = Number(drink.cena || 0)
+  }
+}
 
 const moveDrink = async (drink, direction) => {
   let catDrinks = [...drinks.value].filter(d => d.kategorija === drink.kategorija).sort((a,b) => a.vrstni_red - b.vrstni_red || a.id - b.id);
@@ -571,16 +842,49 @@ const moveDrink = async (drink, direction) => {
 }
 
 const addNewCategory = () => {
-  if(!newCategoryName.value) return;
-  newDrinkModels[newCategoryName.value] = { ime: '', cena: null, cena_clan: null, zaloga: 0, min_zaloga: 5 }
-  drinks.value.push({ id: Date.now(), ime: '*(Nova)*', cena: 0, cena_clan: 0, zaloga: 0, min_zaloga: 5, vrstni_red: 999, kategorija: newCategoryName.value, active: true })
+  const categoryName = newCategoryName.value.trim()
+  if(!categoryName) return;
+  if (uniqueCategories.value.includes(categoryName)) return alert('Kategorija s tem imenom že obstaja.')
+  customCategories.push(categoryName)
+  catOrder.push(categoryName)
+  newDrinkModels[categoryName] = { ime: '', cena: null, cena_clan: null, zaloga: 0, min_zaloga: 5 }
   newCategoryName.value = ''
 }
+
+const renameCategory = async (oldName, rawName) => {
+  const nextName = rawName.trim()
+  if (!nextName || nextName === oldName) return;
+  const alreadyExists = drinks.value.some(d => d.kategorija === nextName)
+  if (alreadyExists && !confirm(`Kategorija "${nextName}" že obstaja. Združim "${oldName}" z njo?`)) return;
+
+  const { error } = await supabase.from('drinks').update({ kategorija: nextName }).eq('kategorija', oldName)
+  if (error) return alert('Preimenovanje kategorije ni uspelo.')
+
+  drinks.value.forEach(d => { if (d.kategorija === oldName) d.kategorija = nextName })
+  const customIndex = customCategories.indexOf(oldName)
+  if (customIndex !== -1) customCategories[customIndex] = nextName
+
+  const orderIndex = catOrder.indexOf(oldName)
+  if (orderIndex !== -1) catOrder[orderIndex] = nextName
+  if (!catOrder.includes(nextName)) catOrder.push(nextName)
+  const uniqueOrder = [...new Set(catOrder)]
+  catOrder.splice(0, catOrder.length, ...uniqueOrder)
+
+  if (newDrinkModels[oldName]) {
+    newDrinkModels[nextName] = newDrinkModels[oldName]
+    delete newDrinkModels[oldName]
+  }
+}
+
 const deleteCategory = async (cat) => {
   if(confirm(`Brisanje cele kategorije "${cat}"?`)) {
     const drinksInCat = drinks.value.filter(d => d.kategorija === cat)
     for (let d of drinksInCat) { await supabase.from('drinks').update({ active: false }).eq('id', d.id) }
     drinks.value = drinks.value.filter(d => d.kategorija !== cat)
+    const customIndex = customCategories.indexOf(cat)
+    if (customIndex !== -1) customCategories.splice(customIndex, 1)
+    const orderIndex = catOrder.indexOf(cat)
+    if (orderIndex !== -1) catOrder.splice(orderIndex, 1)
   }
 }
 const submitNewDrink = async (cat) => { 
@@ -589,7 +893,7 @@ const submitNewDrink = async (cat) => {
   const vrstni_red = drinks.value.filter(d => d.kategorija === cat).length + 1
   const insertData = { ime: model.ime, cena: model.cena, cena_clan: model.cena_clan || null, zaloga: model.zaloga || 0, min_zaloga: model.min_zaloga || 5, vrstni_red: vrstni_red, kategorija: cat, active: true }
   const { data } = await supabase.from('drinks').insert([insertData]).select()
-  if(data) { drinks.value.push(data[0]); model.ime = ''; model.cena = null; model.cena_clan = null; model.zaloga = 0;}
+  if(data) { drinks.value.push(data[0]); initPurchaseModels(); model.ime = ''; model.cena = null; model.cena_clan = null; model.zaloga = 0;}
 }
 const updateDrink = async (d) => { await supabase.from('drinks').update({ ime: d.ime, cena: d.cena, cena_clan: d.cena_clan, zaloga: d.zaloga, min_zaloga: d.min_zaloga }).eq('id', d.id) }
 const deleteDrink = async (id) => { 
@@ -698,6 +1002,28 @@ const sortedUsers = computed(() => {
 const getUserDebt = (id) => currentOrders.value.filter(o => o.userId === id).reduce((sum, o) => sum + o.cena, 0)
 const userCurrentOrders = computed(() => activeUser.value ? currentOrders.value.filter(o => o.userId === activeUser.value.id) : [])
 const userTotalTab = computed(() => userCurrentOrders.value.reduce((sum, o) => sum + o.cena, 0))
+const groupedCurrentOrders = computed(() => {
+  const groups = new Map()
+  userCurrentOrders.value.forEach((order) => {
+    const key = `${order.ime}__${Number(order.cena).toFixed(4)}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        ime: order.ime,
+        cena: order.cena,
+        total: 0,
+        quantity: 0,
+        isDrink: !order.ime.startsWith('Miza'),
+        orders: []
+      })
+    }
+    const group = groups.get(key)
+    group.orders.push(order)
+    group.quantity += 1
+    group.total += order.cena
+  })
+  return Array.from(groups.values())
+})
 
 const calculateDrinkPrice = (d, user) => {
   if (isSpecialTariff.value) return d.cena * (1 + (specialTariffModifier.value / 100));
@@ -705,10 +1031,10 @@ const calculateDrinkPrice = (d, user) => {
   return d.cena;
 }
 
-const addDrink = async (d) => { 
+const addDrink = async (d, priceOverride = null) => { 
   if(!activeUser.value) return alert("Izberi žrtev na levi strani najprej!")
   if(d.zaloga !== null) { d.zaloga--; await supabase.from('drinks').update({ zaloga: d.zaloga }).eq('id', d.id); }
-  const finalPrice = calculateDrinkPrice(d, activeUser.value);
+  const finalPrice = priceOverride ?? calculateDrinkPrice(d, activeUser.value);
   const { data } = await supabase.from('orders').insert([{ user_id: activeUser.value.id, ime_artikla: d.ime, znesek: finalPrice, placano: false }]).select()
   if(data) {
     const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: false, created_at: data[0].timestamp }
@@ -716,30 +1042,50 @@ const addDrink = async (d) => {
   }
 }
 
+const findDrinkForOrder = (orderName) => drinks.value.find(d => d.ime === orderName)
+
+const deleteOrderAndRestoreStock = async (order) => {
+  if (!order) return;
+  if (!order.ime.startsWith('Miza')) {
+    const drink = findDrinkForOrder(order.ime);
+    if (drink && drink.zaloga !== null) {
+      drink.zaloga++;
+      await supabase.from('drinks').update({ zaloga: drink.zaloga }).eq('id', drink.id);
+    }
+  }
+  await supabase.from('orders').delete().eq('id', order.id)
+  currentOrders.value = currentOrders.value.filter(o => o.id !== order.id)
+  allOrders.value = allOrders.value.filter(o => o.id !== order.id)
+}
+
 const removeOrder = async (id) => { 
   if(!confirm('Zmotno vnešeno? Brišem in vrnem v omarico?')) return;
   const order = allOrders.value.find(o => o.id === id);
-  if (order) {
-    if (!order.ime.startsWith('Miza')) {
-      const drink = drinks.value.find(d => d.ime === order.ime);
-      if (drink && drink.zaloga !== null) { drink.zaloga++; await supabase.from('drinks').update({ zaloga: drink.zaloga }).eq('id', drink.id); }
-    }
-    await supabase.from('orders').delete().eq('id', id)
-    currentOrders.value = currentOrders.value.filter(o => o.id !== id); allOrders.value = allOrders.value.filter(o => o.id !== id) 
-  }
+  await deleteOrderAndRestoreStock(order)
+}
+
+const addOrderGroupItem = async (group) => {
+  const drink = findDrinkForOrder(group.ime)
+  if (!drink) return alert('Artikla ne najdem več v omarici.')
+  await addDrink(drink, group.cena)
+}
+
+const removeOrderGroupItem = async (group) => {
+  const order = group.orders[group.orders.length - 1]
+  await deleteOrderAndRestoreStock(order)
+}
+
+const removeOrderGroup = async (group) => {
+  const message = group.quantity > 1
+    ? `Odstranim vseh ${group.quantity} × ${group.ime} in vrnem zalogo?`
+    : 'Zmotno vnešeno? Brišem in vrnem v omarico?'
+  if(!confirm(message)) return;
+  for (const order of [...group.orders]) await deleteOrderAndRestoreStock(order)
 }
 
 const clearTab = async () => {
   if(!confirm(`Res želiš POBRISATI CELOTEN zapitek za ${activeUser.value.ime}? Pijače se vrnejo v zalogo.`)) return;
-  for (const order of userCurrentOrders.value) {
-    if (!order.ime.startsWith('Miza')) {
-      const drink = drinks.value.find(d => d.ime === order.ime);
-      if (drink && drink.zaloga !== null) { drink.zaloga++; await supabase.from('drinks').update({ zaloga: drink.zaloga }).eq('id', drink.id); }
-    }
-    await supabase.from('orders').delete().eq('id', order.id);
-  }
-  const orderIds = userCurrentOrders.value.map(o => o.id);
-  currentOrders.value = currentOrders.value.filter(o => !orderIds.includes(o.id)); allOrders.value = allOrders.value.filter(o => !orderIds.includes(o.id));
+  for (const order of [...userCurrentOrders.value]) await deleteOrderAndRestoreStock(order)
 }
 
 const payTab = async () => { 
@@ -784,45 +1130,61 @@ const currentFilterLabel = computed(() => {
   return btn ? btn.label : '';
 });
 
+const selectedMonthLabel = computed(() => {
+  const date = new Date(selectedYear.value, selectedMonth.value, 1)
+  return `${date.toLocaleString('sl-SI', { month: 'long' })} ${selectedYear.value}`
+})
+
 const stats = computed(() => {
   const now = new Date()
   const startOfShift = new Date(now); if (now.getHours() < 4 || (now.getHours() === 4 && now.getMinutes() < 30)) startOfShift.setDate(startOfShift.getDate() - 1); startOfShift.setHours(4, 30, 0, 0)
   const startOfWeek = getMonday(now);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 4, 30, 0)
   const startOfYear = new Date(now.getFullYear(), 0, 1)
+  const startOfSelectedMonth = new Date(selectedYear.value, selectedMonth.value, 1, 4, 30, 0)
+  const endOfSelectedMonth = new Date(selectedYear.value, selectedMonth.value + 1, 1, 4, 30, 0)
 
-  let d = 0, w = 0, m = 0, y = 0;
+  let d = 0, w = 0, m = 0, selectedMonthly = 0, y = 0;
   allOrders.value.filter(o => o.placano).forEach(o => {
     const time = new Date(o.created_at).getTime()
     if (time >= startOfShift.getTime()) d += o.cena
     if (time >= startOfWeek.getTime()) w += o.cena
     if (time >= startOfMonth.getTime()) m += o.cena
+    if (time >= startOfSelectedMonth.getTime() && time < endOfSelectedMonth.getTime()) selectedMonthly += o.cena
     if (time >= startOfYear.getTime()) y += o.cena
   })
-  return { daily: d, weekly: w, monthly: m, yearly: y }
+  return { daily: d, weekly: w, monthly: m, selectedMonthly, yearly: y }
 })
+
+const orderMatchesActiveFilter = (order, now = new Date()) => {
+  const time = new Date(order.created_at)
+  if (activeFilter.value === 'vse') return true;
+  if (activeFilter.value === 'danes') {
+    const start = new Date(now); if (now.getHours() < 4 || (now.getHours() === 4 && now.getMinutes() < 30)) start.setDate(start.getDate() - 1); start.setHours(4, 30, 0, 0);
+    return time >= start;
+  }
+  if (activeFilter.value === 'teden') return time >= getMonday(now);
+  if (activeFilter.value === 'mesec') return time >= new Date(now.getFullYear(), now.getMonth(), 1, 4, 30, 0);
+  if (activeFilter.value === 'custom_month') {
+    const start = new Date(selectedYear.value, selectedMonth.value, 1, 4, 30, 0);
+    const end = new Date(selectedYear.value, selectedMonth.value + 1, 1, 4, 30, 0);
+    return time >= start && time < end;
+  }
+  return true;
+}
 
 const filteredOrdersForStats = computed(() => {
   const now = new Date()
   return allOrders.value.filter(o => {
     if (!o.placano) return false;
-    const time = new Date(o.created_at);
-
-    if (activeFilter.value === 'vse') return true;
-    if (activeFilter.value === 'danes') {
-      const start = new Date(now); if (now.getHours() < 4 || (now.getHours() === 4 && now.getMinutes() < 30)) start.setDate(start.getDate() - 1); start.setHours(4, 30, 0, 0);
-      return time >= start;
-    }
-    if (activeFilter.value === 'teden') return time >= getMonday(now);
-    if (activeFilter.value === 'mesec') return time >= new Date(now.getFullYear(), now.getMonth(), 1, 4, 30, 0);
-    if (activeFilter.value === 'custom_month') {
-      const start = new Date(selectedYear.value, selectedMonth.value, 1, 4, 30, 0);
-      const end = new Date(selectedYear.value, selectedMonth.value + 1, 1, 4, 30, 0);
-      return time >= start && time < end;
-    }
-    return true;
+    return orderMatchesActiveFilter(o, now)
   });
 });
+
+const filteredOrdersForMarket = computed(() => {
+  const now = new Date()
+  return allOrders.value.filter(o => !o.ime.startsWith('Miza') && orderMatchesActiveFilter(o, now))
+})
 
 const topDrunks = computed(() => {
   const map = {}
@@ -842,6 +1204,85 @@ const topArticles = computed(() => {
   })
   return Object.values(map).sort((a,b) => b.kolicina - a.kolicina)
 })
+
+const marketRows = computed(() => {
+  const rows = sortedDrinks.value.map((drink) => {
+    const marketOrders = filteredOrdersForMarket.value.filter(o => o.ime === drink.ime)
+    const soldQty = marketOrders.length
+    const revenue = marketOrders.reduce((sum, order) => sum + Number(order.cena || 0), 0)
+    const buyPrice = getLatestBuyPrice(drink)
+    const stock = Number(drink.zaloga || 0)
+    const sellPrice = Number(drink.cena || 0)
+    const realizedProfit = buyPrice > 0 ? revenue - (soldQty * buyPrice) : revenue
+    const stockValue = stock * buyPrice
+    const potentialRevenue = stock * sellPrice
+    const potentialProfit = buyPrice > 0 ? potentialRevenue - stockValue : potentialRevenue
+    const marginPct = sellPrice > 0 && buyPrice > 0 ? ((sellPrice - buyPrice) / sellPrice) * 100 : 0
+    const minStock = Number(drink.min_zaloga || 0)
+    let suggestion = ''
+    let suggestionClass = ''
+
+    if (stock <= minStock && soldQty > 0 && marginPct >= 25) {
+      suggestion = 'Obnovi'
+      suggestionClass = 'renew'
+    } else if (buyPrice > 0 && marginPct < 20) {
+      suggestion = 'Dvigni ceno'
+      suggestionClass = 'raise'
+    } else if (stock > minStock * 2 && soldQty === 0) {
+      suggestion = 'Znižaj / test'
+      suggestionClass = 'lower'
+    } else if (soldQty >= 3 && marginPct >= 45) {
+      suggestion = 'Top artikel'
+      suggestionClass = 'top'
+    }
+
+    return {
+      id: drink.id,
+      ime: drink.ime,
+      soldQty,
+      revenue,
+      buyPrice,
+      stock,
+      stockValue,
+      potentialProfit,
+      realizedProfit,
+      marginPct,
+      suggestion,
+      suggestionClass
+    }
+  })
+
+  const { key, dir } = marketSort.value
+  const direction = dir === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const aValue = a[key]
+    const bValue = b[key]
+    if (typeof aValue === 'string' || typeof bValue === 'string') {
+      const result = String(aValue || '').localeCompare(String(bValue || ''), 'sl', { sensitivity: 'base' })
+      return result * direction
+    }
+    return ((Number(aValue) || 0) - (Number(bValue) || 0)) * direction
+  })
+})
+
+const marketSummary = computed(() => marketRows.value.reduce((totals, row) => {
+  totals.stockValue += row.stockValue
+  totals.potentialProfit += row.potentialProfit
+  totals.realizedProfit += row.realizedProfit
+  return totals
+}, { stockValue: 0, potentialProfit: 0, realizedProfit: 0 }))
+
+const getMarketRow = (drink) => {
+    return marketRows.value.find(row => row.id === drink.id) || {
+    soldQty: 0,
+    stockValue: 0,
+    potentialProfit: 0,
+    realizedProfit: 0,
+    marginPct: 0,
+    suggestion: '',
+    suggestionClass: ''
+  }
+}
 
 const weekdayChartData = computed(() => {
   const daysMap = [{ name: 'Pon', amount: 0 }, { name: 'Tor', amount: 0 }, { name: 'Sre', amount: 0 }, { name: 'Čet', amount: 0 }, { name: 'Pet', amount: 0 }, { name: 'Sob', amount: 0 }, { name: 'Ned', amount: 0 }];
@@ -910,7 +1351,7 @@ const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) adminAuth.value
 .kiosk-container.light { --bg-color: #e0e0e0; --panel-bg: #ffffff; --text-color: #222222; --border-color: #cccccc; --input-bg: #f5f5f5; --item-bg: #f9f9f9; }
 
 /* GLOBAL & LAYOUT */
-.kiosk-container { display: grid; grid-template-columns: 1.1fr 1.2fr 1.1fr; height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box;   height: 100dvh; overflow: hidden; }
+.kiosk-container { display: grid; grid-template-columns: minmax(210px, 0.85fr) minmax(320px, 1.25fr) minmax(340px, 1.3fr); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box;   height: 100dvh; overflow: hidden; }
 .panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; overflow-y: auto; border: 1px solid var(--border-color); overflow-y: auto; padding-bottom: 120px !important; }
 
 h2, h3, h4 { color: var(--text-color); margin-top: 0; }
@@ -932,30 +1373,30 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .active-discount { background: #d32f2f; border-color: #ff5252; color: white;}
 
 /* RE-ALIGNED PLAYERS (VICTIMS) */
-.user-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--item-bg); border-radius: 8px; margin-bottom: 6px; cursor: pointer; border: 1px solid transparent; gap: 10px; }
+.user-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 9px; background: var(--item-bg); border-radius: 8px; margin-bottom: 5px; cursor: pointer; border: 1px solid transparent; gap: 7px; }
 .is-member { border-left: 6px solid #2980b9; }
 .is-guest { border-left: 6px solid #888; }
 .selected-user { background: #354a35 !important; border-color: #4caf50; color: white;}
 .user-info { text-align: left; flex-grow: 1; min-width: 0; }
-.user-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: 16px; }
+.user-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: var(--victim-fz); font-weight: var(--victim-fw); }
 
-.user-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; justify-content: flex-end; }
-.debt-warning { color: #ff5252; font-weight: bold; font-size: 14px; white-space: nowrap; margin-right: 5px; }
-.user-badge-static { font-size: 11px; color: white; padding: 2px 5px; border-radius: 3px; font-weight: bold; width: 14px; text-align: center;}
+.user-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
+.debt-warning { color: #ff5252; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
+.user-badge-static { font-size: 10px; color: white; padding: 1px 4px; border-radius: 3px; font-weight: bold; width: 12px; text-align: center;}
 .badge-clan { background: #2980b9; }
 .badge-neclan { background: #555; }
-.btn-icon { background: var(--border-color); border: none; color: var(--text-color); padding: 6px 10px; cursor: pointer; border-radius: 4px; }
+.btn-icon { background: var(--border-color); border: none; color: var(--text-color); padding: 5px 7px; cursor: pointer; border-radius: 4px; }
 .btn-del-red { background: #c62828; color: white;}
 
 /* DRINKS & CATEGORIES */
-.cat-section { margin-bottom: 25px; }
+.cat-section { width: 100%; margin-bottom: 25px; }
 .cat-title-box { background: var(--input-bg); padding: 8px 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; border: 1px solid var(--border-color); }
 .cat-title-box h3 { margin: 0; text-transform: uppercase; font-weight: bold; }
-.drink-grid { display: grid; gap: 10px; justify-content: center; }
-.btn-drink { width: var(--drink-w); height: var(--drink-h); font-size: var(--drink-fz); color: var(--drink-fc); padding: 15px; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; flex-direction: column; justify-content: center; align-items: center;}
+.drink-grid { display: grid; width: 100%; gap: 10px; justify-content: stretch; align-items: stretch; }
+.btn-drink { width: var(--drink-w); min-width: 0; min-height: var(--drink-h); height: auto; font-size: var(--drink-fz); color: var(--drink-fc); padding: 10px 8px; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden;}
 .btn-drink:active { transform: scale(0.97); }
-.drink-name { margin-bottom: 5px; font-weight: bold;}
-.drink-price-area { display: flex; flex-direction: column; align-items: center; }
+.drink-name { width: 100%; margin-bottom: 5px; font-size: var(--drink-name-fz); font-weight: var(--drink-name-fw); line-height: 1.12; overflow-wrap: anywhere; word-break: normal; hyphens: auto;}
+.drink-price-area { display: flex; flex-direction: column; align-items: center; max-width: 100%; font-size: var(--drink-price-fz); line-height: 1.15; overflow-wrap: anywhere; }
 .special-price { color: #ff9800; font-size: 1.1em;} 
 .member-price-tag { font-size: 0.8em; opacity: 0.8; margin-top: 3px; font-weight: normal; }
 
@@ -981,17 +1422,25 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 /* TAB (ZAPITEK) */
 .tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
 .order-list { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
-.order-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 5px; border-bottom: 1px solid var(--border-color); }
-.order-price-box { display: flex; align-items: center; gap: 15px; font-weight: bold; }
-.btn-del-mini { background: #c62828; color: white; border: none; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.order-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 3px; border-bottom: 1px solid var(--border-color); }
+.order-main { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
+.order-name { width: 100%; font-weight: bold; font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-meta { color: #888; font-size: 11px; line-height: 1.2; white-space: nowrap; }
+.order-controls { display: grid; grid-template-columns: 52px 28px 16px 28px 26px; align-items: center; justify-content: end; gap: 4px; flex: 0 0 auto; }
+.order-total { font-weight: bold; font-size: 15px; white-space: nowrap; text-align: right; }
+.order-qty { min-width: 0; text-align: center; font-size: 15px; font-weight: bold; }
+.btn-qty { width: 28px; height: 30px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 17px; font-weight: bold; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.btn-qty-minus { background: #c62828; }
+.btn-qty-plus { background: #2e7d32; }
+.btn-del-mini { background: #c62828; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 .tab-actions { display: flex; gap: 10px; align-items: stretch; }
 .btn-pay { background: #1976d2; color: white; border: none; padding: 15px; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 16px; }
 .empty-state { text-align: center; padding: 30px; color: #888; font-style: italic; }
 
 /* ADMIN MODAL WINDOW */
 .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-.modal-content { background: var(--panel-bg); border: 1px solid var(--border-color); padding: 35px; border-radius: 12px; }
-.admin-large { width: 780px; }
+.modal-content { background: var(--panel-bg); border: 1px solid var(--border-color); padding: 35px; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,0.45); }
+.admin-large { width: min(1180px, calc(100vw - 32px)); height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
 .auth-small { width: 330px !important; padding: 20px !important; border-radius: 10px; }
 
 /* COMPACT AUTH DIALOG */
@@ -1001,12 +1450,15 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .btn-compact-action { padding: 8px !important; font-size: 13px !important; border-radius: 4px !important; flex: 1; font-weight: bold; cursor: pointer; border: none; color: white;}
 
 /* ADMIN INSIDE */
-.admin-tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: wrap;}
-.tab-btn { background: transparent; color: #888; border: none; font-size: 14px; cursor: pointer; font-weight: bold; padding: 5px 10px; }
-.tab-btn.active { color: #4caf50; border-bottom: 2px solid #4caf50; }
-.admin-scroll { max-height: 65vh; overflow-y: auto; padding-right: 10px; }
-.admin-cat-block { margin-bottom: 20px; background: var(--item-bg); padding: 15px; border-radius: 8px; border-left: 4px solid #4caf50; }
+.admin-dashboard { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap;}
+.tab-btn { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); color: #a7a7ad; border: 1px solid var(--border-color); font-size: 13px; cursor: pointer; font-weight: bold; padding: 8px 12px; border-radius: 999px; transition: all 0.18s ease; }
+.tab-btn:hover { color: var(--text-color); border-color: rgba(76,175,80,0.55); }
+.tab-btn.active { color: #ffffff; background: linear-gradient(135deg, #2e7d32, #43a047); border-color: #66bb6a; box-shadow: 0 8px 20px rgba(76,175,80,0.22); }
+.admin-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: 10px; }
+.admin-cat-block { margin-bottom: 20px; background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); border-left: 4px solid #4caf50; }
 .cat-header { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-bottom: 10px; align-items: center;}
+.category-name-input { width: min(260px, 52vw); font-size: 20px; font-weight: 800; text-transform: none; }
 
 .admin-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--border-color); }
 .input-inline { background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 6px; border-radius: 4px; font-size: 13px;}
@@ -1019,7 +1471,13 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .sort-arrows { display: flex; flex-direction: column; gap: 2px; margin-right: 10px; }
 .arrow-btn { background: var(--border-color); border: none; color: var(--text-color); font-size: 10px; cursor: pointer; padding: 2px 4px; border-radius: 2px; }
 .arrow-btn:hover { background: #4caf50; color: white; }
+.fold-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-color); cursor: pointer; font-weight: 900; line-height: 1; }
+.fold-btn:hover { border-color: #4caf50; color: #4caf50; }
 .inline-add-row { display: flex; align-items: center; gap: 10px; background: var(--input-bg); padding: 10px; border-radius: 6px; }
+.settings-grid, .tab-name-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.settings-grid label, .tab-name-grid label { display: flex; flex-direction: column; gap: 6px; text-align: left; color: #aaa; font-size: 12px; font-weight: bold; }
+.settings-grid .check-row { flex-direction: row; align-items: center; background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; }
+.settings-grid .check-row input { transform: scale(1.2); }
 .btn-small { padding: 6px 12px; width: auto; }
 .add-drink-box { background: var(--item-bg); padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px dashed #888; }
 .add-drink-row { display: flex; gap: 10px; align-items: center; }
@@ -1033,10 +1491,33 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .btn-orange { background-color: #f57c00 !important; }
 
 /* INVENTURA */
+.market-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.market-card { background: linear-gradient(135deg, rgba(76,175,80,0.2), rgba(25,118,210,0.12)); border: 1px solid rgba(76,175,80,0.28); border-radius: 8px; padding: 14px; text-align: left; }
+.market-card span { display: block; color: #aaa; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
+.market-card strong { color: var(--text-color); font-size: 22px; }
+.inventory-item { display: grid; grid-template-columns: minmax(90px, 0.7fr) minmax(180px, 0.8fr) auto minmax(305px, auto); gap: 7px; padding: 12px 0; border-bottom: 1px dashed var(--border-color); align-items: center; }
+.inventory-title { display: flex; flex-direction: column; gap: 5px; text-align: left; min-width: 0; }
+.inventory-title strong { color: var(--text-color); font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-title span { color: #9aa0a6; font-size: 12px; font-weight: bold; }
+.inventory-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.mini-field { display: flex; align-items: center; gap: 5px; }
+.mini-field span { font-size: 11px; color: #888; font-weight: bold; }
+.mini-field input { width: 42px; text-align: center; }
+.stock-stepper { display: flex; align-items: center; gap: 5px; }
+.purchase-row { display: grid; grid-template-columns: minmax(40px, 50px) repeat(2, minmax(54px, 66px)) minmax(78px, 86px) auto; gap: 5px; align-items: end; justify-content: start; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px; min-width: 0; }
+.purchase-row label { display: flex; flex-direction: column; gap: 5px; text-align: left; color: #aaa; font-size: 10px; font-weight: bold; }
+.purchase-row input { width: 100%; box-sizing: border-box; }
+.purchase-save { height: 32px; white-space: nowrap; padding: 6px 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.purchase-undo { height: 32px; white-space: nowrap; padding: 6px 7px; font-size: 12px; }
+.purchase-undo:disabled { opacity: 0.38; cursor: not-allowed; filter: grayscale(0.6); }
+.market-line { display: flex; flex-wrap: nowrap; gap: 5px; min-width: 0; }
+.market-line span { background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 999px; color: #aaa; font-size: 10px; font-weight: bold; padding: 5px 7px; min-width: 58px; max-width: 76px; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.05; overflow: hidden; }
+.market-line small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #9aa0a6; }
+.market-line strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color); font-size: 11px; }
 .btn-stock { background: var(--border-color); color: var(--text-color); border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 .btn-stock-minus { background: #c62828; color: white;}
 .btn-stock-plus { background: #2e7d32; color: white;}
-.stock-input-large { width: 60px; text-align: center; font-weight: bold; font-size: 16px; }
+.stock-input-large { width: 48px; text-align: center; font-weight: bold; font-size: 16px; }
 .low-stock { background-color: rgba(255, 82, 82, 0.2); border-color: #ff5252; color: #ff5252;}
 
 /* STATISTIKA & GRAFI */
@@ -1051,6 +1532,25 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .stat-table th { padding: 4px 8px; border-bottom: 1px solid var(--border-color); color: #888; font-size: 12px; text-align: left;}
 .stat-table td { padding: 4px 8px; border-bottom: 1px dashed var(--border-color); font-size: 14px; color: var(--text-color);}
 .stat-table tr:hover td { background: rgba(0,0,0,0.2); }
+.market-table-card { max-width: 100%; overflow: hidden; box-sizing: border-box; position: static; }
+.market-table-card .stat-table { table-layout: fixed; width: 100%; min-width: 0; }
+.market-table-card .stat-table th,
+.market-table-card .stat-table td { padding: 5px 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.market-table-card .stat-table th { padding: 0 6px 6px; font-size: 12px; vertical-align: middle; }
+.market-table-card .stat-table th:first-child,
+.market-table-card .stat-table td:first-child { width: 34%; white-space: normal; }
+.market-col-name { text-align: left !important; }
+.market-col-center { text-align: center !important; }
+.sort-header { width: 100%; display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; color: #888; font: inherit; font-weight: 800; cursor: pointer; padding: 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.market-col-center .sort-header { justify-content: center; }
+.market-col-name .sort-header { justify-content: flex-start; }
+.sort-header:hover { color: var(--text-color); }
+.sort-header span { display: inline-block; width: 9px; flex: 0 0 9px; color: #4caf50; }
+.market-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 0; max-width: 100%; border-radius: 999px; padding: 4px 7px; font-size: 10px; font-weight: bold; color: #fff; white-space: nowrap; }
+.market-pill.renew { background: #2e7d32; }
+.market-pill.raise { background: #c77700; }
+.market-pill.lower { background: #1976d2; }
+.market-pill.top { background: #6a8f2a; }
 
 .chart-box { background: var(--item-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
 .css-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 160px; margin-top: 20px; border-bottom: 1px solid #555; padding-bottom: 10px; }
@@ -1060,4 +1560,235 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .bar-label { margin-top: 5px; font-size: 12px; color: #aaa; font-weight: bold; }
 
 .btn-file-upload { cursor: pointer; text-align:center; padding: 12px; border-radius:6px; font-weight:bold; color: white; display: inline-block;}
+
+.watermark {
+  left: 50%;
+  right: auto;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(18, 18, 18, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  color: #b8b8bd;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  z-index: 900;
+}
+
+.watermark .author-link {
+  margin-left: 4px;
+  color: #58a6ff;
+  text-decoration: none;
+  font-weight: 800;
+}
+
+@media (max-width: 760px), (orientation: portrait) and (max-width: 900px) {
+  :global(html), :global(body) {
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .kiosk-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    height: auto;
+    overflow: visible;
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .panel {
+    width: 100%;
+    padding: 12px;
+    padding-bottom: 24px !important;
+    border-radius: 8px;
+    overflow: visible;
+    box-sizing: border-box;
+  }
+
+  h2 {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .quick-add {
+    margin-bottom: 16px !important;
+  }
+
+  .user-item {
+    padding: 8px 9px;
+  }
+
+  .drink-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px;
+  }
+
+  .btn-drink {
+    width: 100%;
+    min-height: 68px;
+    height: auto;
+    padding: 10px 6px;
+    font-size: 14px;
+  }
+
+  .table-card {
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .table-controls,
+  .tab-actions,
+  .auth-buttons,
+  .auth-buttons-compact {
+    gap: 8px;
+  }
+
+  .timer {
+    font-size: 28px;
+  }
+
+  .order-list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .order-row {
+    align-items: center;
+    gap: 6px;
+  }
+
+  .order-controls {
+    grid-template-columns: 48px 28px 14px 28px 24px;
+    gap: 3px;
+  }
+
+  .order-total {
+    font-size: 14px;
+    text-align: right;
+  }
+
+  .btn-qty {
+    width: 28px;
+    height: 30px;
+  }
+
+  .order-qty {
+    font-size: 14px;
+  }
+
+  .btn-del-mini {
+    padding: 4px 7px;
+  }
+
+  .modal-overlay {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .modal-content,
+  .admin-large,
+  .auth-small {
+    width: 100% !important;
+    max-width: none;
+    padding: 14px !important;
+    box-sizing: border-box;
+  }
+
+  .admin-large {
+    height: calc(100dvh - 20px) !important;
+  }
+
+  .admin-dashboard {
+    min-height: 0;
+  }
+
+  .admin-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .admin-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0;
+  }
+
+  .market-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .market-card strong {
+    font-size: 20px;
+  }
+
+  .inventory-item {
+    grid-template-columns: 1fr;
+    overflow: hidden;
+  }
+
+  .inventory-controls {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .purchase-row {
+    grid-template-columns: 1fr;
+  }
+
+  .market-line {
+    gap: 6px;
+  }
+
+  .market-line span {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .admin-item,
+  .inline-add-row,
+  .cat-header {
+    flex-wrap: wrap;
+  }
+
+  .name-input {
+    min-width: 150px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .watermark {
+    position: static !important;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    margin: 8px auto 0;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
 </style>
