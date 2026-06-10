@@ -634,9 +634,9 @@ const dbError = ref('')
 const dbLoading = ref(false)
 
 const tables = ref([
-  { id: 1, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null },
-  { id: 2, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null },
-  { id: 3, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null }
+  { id: 1, status: 'prosta', payer: null, lockedPayer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null },
+  { id: 2, status: 'prosta', payer: null, lockedPayer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null },
+  { id: 3, status: 'prosta', payer: null, lockedPayer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null }
 ])
 
 const search = ref('')
@@ -721,7 +721,7 @@ watch(activeUser, (user) => {
   showCustomCharge.value = false
   if (!user) return
   tables.value.forEach((table) => {
-    if (table.status === 'prosta') table.payer = user
+    if (table.status === 'prosta' && !table.lockedPayer) table.payer = user
   })
 })
 
@@ -1687,6 +1687,9 @@ const startTable = (t) => {
   if (!isSpecialTariff.value || !flatRateActive.value) {
     if (!t.selectedTariff) { alert('Izberi tarifo!'); return; }
   }
+  const payerSnapshot = { id: t.payer.id, ime: t.payer.ime, tip: t.payer.tip }
+  t.payer = payerSnapshot
+  t.lockedPayer = payerSnapshot
   t.status = 'zasedena'
   t.interval = setInterval(() => { 
     t.elapsedSeconds++; 
@@ -1709,17 +1712,18 @@ const stopTable = async (t) => {
   clearInterval(t.interval)
   if(t.currentCost > 0) {
     const rateName = (isSpecialTariff.value && flatRateActive.value) ? 'Enotna tarifa' : t.selectedTariff.kombinacija;
-    const newOrder = { user_id: t.payer.id, ime_artikla: `Miza ${t.id} (${rateName})`, znesek: t.currentCost, placano: false }
+    const payer = t.lockedPayer || t.payer
+    const newOrder = { user_id: payer.id, ime_artikla: `Miza ${t.id} (${rateName})`, znesek: t.currentCost, placano: false }
     const { data } = await supabase.from('orders').insert([newOrder]).select()
     if(data) {
        const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: false, created_at: data[0].timestamp }
        currentOrders.value.push(o); allOrders.value.push(o)
     }
   }
-  t.status = 'prosta'; t.payer = null; t.selectedTariff = null; t.elapsedSeconds = 0; t.currentCost = 0; 
+  t.status = 'prosta'; t.payer = activeUser.value || null; t.lockedPayer = null; t.selectedTariff = null; t.elapsedSeconds = 0; t.currentCost = 0; 
 }
 
-const addTable = () => { tables.value.push({ id: tables.value.length + 1, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null }) }
+const addTable = () => { tables.value.push({ id: tables.value.length + 1, status: 'prosta', payer: activeUser.value || null, lockedPayer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null }) }
 const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
