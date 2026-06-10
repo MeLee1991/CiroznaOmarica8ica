@@ -545,64 +545,76 @@
               <div class="admin-cat-block">
                 <h3 style="text-align: center; margin-bottom: 20px;">Varnostne Kopije Podatkov</h3>
                 
-                <div style="margin-bottom: 25px;">
+                <div class="backup-primary">
+                  <h4>Celoten Backup</h4>
+                  <div class="backup-primary-actions">
+                    <button @click="exportFullBackupJSON" class="btn-start btn-blue">⬇ Izvozi Vse</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
+                      ⬆ Uvozi Vse <input type="file" accept=".json" style="display:none" @change="importFullBackupJSON">
+                    </label>
+                  </div>
+                  <div class="backup-slice-box">
+                    <span>Iz istega backup fajla uvozi samo:</span>
+                    <div class="backup-slice-grid">
+                      <label class="btn-file-upload btn-slice">Igralci <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'users')"></label>
+                      <label class="btn-file-upload btn-slice">Artikli <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'drinks')"></label>
+                      <label class="btn-file-upload btn-slice">Tarife <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'tariffs')"></label>
+                      <label class="btn-file-upload btn-slice">Zgodovina <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'orders')"></label>
+                      <label class="btn-file-upload btn-slice">Nastavitve <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'settings')"></label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="backup-grid">
+                <div class="backup-mini">
                   <h4 style="margin-bottom: 10px;">Žrtve (Igralci)</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportUsersCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Žrtve</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                  <div class="backup-actions">
+                    <button @click="exportUsersCSV" class="btn-start btn-blue">⬇ Izvozi Žrtve</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
                       ⬆ Uvozi Žrtve <input type="file" accept=".csv" style="display:none" @change="importUsersCSV">
                     </label>
                   </div>
                 </div>
 
-                <div style="margin-bottom: 25px;">
+                <div class="backup-mini">
                   <h4 style="margin-bottom: 10px;">Cirozna Omarica (Artikli)</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportDrinksCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Artikle</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                  <div class="backup-actions">
+                    <button @click="exportDrinksCSV" class="btn-start btn-blue">⬇ Izvozi Artikle</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
                       ⬆ Uvozi Artikle <input type="file" accept=".csv" style="display:none" @change="importDrinksCSV">
                     </label>
                   </div>
                 </div>
 
-                <div style="margin-bottom: 25px;">
+                <div class="backup-mini">
                   <h4 style="margin-bottom: 10px;">Zgodovina Zapitkov</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportOrdersCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Zgodovino</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                  <div class="backup-actions">
+                    <button @click="exportOrdersCSV" class="btn-start btn-blue">⬇ Izvozi Zgodovino</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
                       ⬆ Uvozi Zgodovino <input type="file" accept=".csv" style="display:none" @change="importOrdersCSV">
                     </label>
                   </div>
                 </div>
 
-                <div style="margin-bottom: 25px;">
+                <div class="backup-mini">
                   <h4 style="margin-bottom: 10px;">Mize & Tarife</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportTariffsCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Tarife</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                  <div class="backup-actions">
+                    <button @click="exportTariffsCSV" class="btn-start btn-blue">⬇ Izvozi Tarife</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
                       ⬆ Uvozi Tarife <input type="file" accept=".csv" style="display:none" @change="importTariffsCSV">
                     </label>
                   </div>
                 </div>
 
-                <div style="margin-bottom: 25px;">
+                <div class="backup-mini">
                   <h4 style="margin-bottom: 10px;">Nastavitve Izgleda</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportSettingsJSON" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Nastavitve</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                  <div class="backup-actions">
+                    <button @click="exportSettingsJSON" class="btn-start btn-blue">⬇ Izvozi Nastavitve</button>
+                    <label class="btn-warn btn-file-upload btn-orange">
                       ⬆ Uvozi Nastavitve <input type="file" accept=".json" style="display:none" @change="importSettingsJSON">
                     </label>
                   </div>
                 </div>
-
-                <div>
-                  <h4 style="margin-bottom: 10px;">Celoten Backup</h4>
-                  <div class="auth-buttons" style="display:flex; gap:10px;">
-                    <button @click="exportFullBackupJSON" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Vse</button>
-                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
-                      ⬆ Uvozi Vse <input type="file" accept=".json" style="display:none" @change="importFullBackupJSON">
-                    </label>
-                  </div>
                 </div>
 
               </div>
@@ -1259,64 +1271,87 @@ const exportFullBackupJSON = async () => {
 const normalizeBackupOrder = (order) => ({
   user_id: order.user_id ?? order.userId,
   ime_artikla: order.ime_artikla ?? order.ime,
-  znesek: Number(order.znesek ?? order.cena ?? 0),
+  znesek: toNumber(order.znesek ?? order.cena),
   placano: Boolean(order.placano),
   timestamp: order.timestamp ?? order.created_at ?? new Date().toISOString()
 })
-const importFullBackupJSON = async (event) => {
-  const backup = await readJSONFile(event)
-  if (!backup) return
-  if (!confirm('Uvozim celoten backup? Obstoječih enakih imen ne bom podvajal, zgodovina pa se doda samo, če je še ni.')) return
-
-  if (backup.settings) applySettingsBackup(backup.settings)
-
+const importBackupSections = async (backup, sections) => {
+  if (sections.includes('settings') && backup.settings) applySettingsBackup(backup.settings)
+  
   const userIdMap = new Map()
   for (const user of backup.users || []) {
-    const existingUser = users.value.find(u => String(u.ime).toLowerCase() === String(user.ime).toLowerCase())
+    const existingUser = users.value.find(u => normalizedText(u.ime).toLowerCase() === normalizedText(user.ime).toLowerCase())
     if (existingUser) {
       userIdMap.set(String(user.id), existingUser.id)
-    } else {
+    } else if (sections.includes('users')) {
       const { data } = await supabase.from('users').insert([{ id: user.id, ime: user.ime, tip: user.tip || 'nečlan' }]).select()
       if (data?.[0]) {
-        users.value.push(data[0])
+        users.value.push(normalizeUserRow(data[0]))
         userIdMap.set(String(user.id), data[0].id)
       }
     }
   }
 
-  for (const drink of backup.drinks || []) {
-    if (!drinks.value.find(d => String(d.ime).toLowerCase() === String(drink.ime).toLowerCase())) {
-      const { data } = await supabase.from('drinks').insert([{ ...drink, active: drink.active !== false }]).select()
-      if (data?.[0] && data[0].active !== false) drinks.value.push(data[0])
+  if (sections.includes('drinks')) {
+    for (const drink of backup.drinks || []) {
+      if (!drinks.value.find(d => normalizedText(d.ime).toLowerCase() === normalizedText(drink.ime).toLowerCase())) {
+        const { data } = await supabase.from('drinks').insert([{ ...drink, active: drink.active !== false }]).select()
+        if (data?.[0] && data[0].active !== false) drinks.value.push(normalizeDrinkRow(data[0]))
+      }
     }
   }
 
-  for (const tariff of backup.tariffs || []) {
-    const existing = tariffs.value.find(t => t.id === tariff.id || String(t.kombinacija).toLowerCase() === String(tariff.kombinacija).toLowerCase())
-    if (existing) {
-      existing.kombinacija = tariff.kombinacija
-      existing.cena_na_uro = Number(tariff.cena_na_uro || 0)
-      await supabase.from('tariffs').update({ kombinacija: existing.kombinacija, cena_na_uro: existing.cena_na_uro }).eq('id', existing.id)
-    } else {
-      const { data } = await supabase.from('tariffs').insert([{ id: tariff.id, kombinacija: tariff.kombinacija, cena_na_uro: Number(tariff.cena_na_uro || 0) }]).select()
-      if (data?.[0]) tariffs.value.push(data[0])
+  if (sections.includes('tariffs')) {
+    for (const tariff of backup.tariffs || []) {
+      const existing = tariffs.value.find(t => t.id === tariff.id || normalizedText(t.kombinacija).toLowerCase() === normalizedText(tariff.kombinacija).toLowerCase())
+      if (existing) {
+        existing.kombinacija = tariff.kombinacija
+        existing.cena_na_uro = toNumber(tariff.cena_na_uro)
+        await supabase.from('tariffs').update({ kombinacija: existing.kombinacija, cena_na_uro: existing.cena_na_uro }).eq('id', existing.id)
+      } else {
+        const { data } = await supabase.from('tariffs').insert([{ id: tariff.id, kombinacija: tariff.kombinacija, cena_na_uro: toNumber(tariff.cena_na_uro) }]).select()
+        if (data?.[0]) tariffs.value.push(normalizeTariffRow(data[0]))
+      }
     }
+    applyDefaultTariffToFreeTables()
   }
 
-  for (const rawOrder of backup.orders || []) {
-    const order = normalizeBackupOrder(rawOrder)
-    order.user_id = userIdMap.get(String(order.user_id)) ?? order.user_id
-    const exists = allOrders.value.some(o => String(o.userId) === String(order.user_id) && o.ime === order.ime_artikla && Number(o.cena) === Number(order.znesek) && o.created_at === order.timestamp)
-    if (exists) continue
-    const { data } = await supabase.from('orders').insert([order]).select()
-    if (data?.[0]) {
-      const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: data[0].placano, created_at: data[0].timestamp }
-      allOrders.value.push(o); if (!o.placano) currentOrders.value.push(o)
+  if (sections.includes('orders')) {
+    for (const rawOrder of backup.orders || []) {
+      const order = normalizeBackupOrder(rawOrder)
+      order.user_id = userIdMap.get(String(order.user_id)) ?? order.user_id
+      const exists = allOrders.value.some(o => String(o.userId) === String(order.user_id) && o.ime === order.ime_artikla && Number(o.cena) === Number(order.znesek) && o.created_at === order.timestamp)
+      if (exists) continue
+      const { data } = await supabase.from('orders').insert([order]).select()
+      if (data?.[0]) {
+        const o = normalizeOrderRow(data[0])
+        allOrders.value.push(o); if (!o.placano) currentOrders.value.push(o)
+      }
     }
   }
   initCategoryModels()
   initPurchaseModels()
+}
+const importFullBackupJSON = async (event) => {
+  const backup = await readJSONFile(event)
+  if (!backup) return
+  if (!confirm('Uvozim celoten backup? Obstoječih enakih imen ne bom podvajal, zgodovina pa se doda samo, če je še ni.')) return
+  await importBackupSections(backup, ['users', 'drinks', 'tariffs', 'orders', 'settings'])
   alert('Uvoz celotnega backupa končan!')
+}
+const backupSectionLabels = {
+  users: 'igralcev',
+  drinks: 'artiklov',
+  tariffs: 'tarif',
+  orders: 'zgodovine',
+  settings: 'nastavitev'
+}
+const importBackupSectionJSON = async (event, section) => {
+  const backup = await readJSONFile(event)
+  if (!backup) return
+  if (!confirm(`Iz tega celotnega backupa uvozim samo ${backupSectionLabels[section] || section}?`)) return
+  await importBackupSections(backup, [section])
+  alert(`Uvoz ${backupSectionLabels[section] || section} končan!`)
 }
 
 const toggleUserStatus = async (user) => {
@@ -1922,6 +1957,22 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .db-section h4 { margin-bottom: 10px; }
 .btn-blue { background-color: #1976d2 !important; }
 .btn-orange { background-color: #f57c00 !important; }
+.backup-primary { margin-bottom: 16px; padding: 16px; border-radius: 10px; border: 1px solid rgba(76,175,80,0.5); background: linear-gradient(135deg, rgba(76,175,80,0.18), rgba(25,118,210,0.1)); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03); }
+.backup-primary h4 { margin: 0 0 12px; font-size: 18px; text-align: center; color: var(--text-color); }
+.backup-primary-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.backup-primary-actions .btn-start,
+.backup-primary-actions .btn-file-upload { flex: 0 1 220px; margin: 0; padding: 12px 14px; }
+.backup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.backup-mini { padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.08); }
+.backup-mini h4 { margin: 0 0 9px !important; font-size: 13px; color: #bbb; }
+.backup-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.backup-actions .btn-start,
+.backup-actions .btn-file-upload { flex: 0 1 145px; margin: 0; padding: 9px 10px; font-size: 12px; }
+.backup-slice-box { margin-top: 12px; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.1); }
+.backup-slice-box span { display: block; color: #aaa; font-size: 12px; font-weight: 800; margin-bottom: 8px; }
+.backup-slice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 7px; }
+.btn-slice { background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px; font-size: 12px; }
+.btn-slice:hover { border-color: #4caf50; }
 
 /* INVENTURA */
 .market-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
