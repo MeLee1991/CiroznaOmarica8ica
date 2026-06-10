@@ -113,6 +113,11 @@
 
       <div v-if="activeUser" class="tab-section">
         <h3>Zapitek: {{ activeUser.ime }}</h3>
+        <div class="custom-charge-row">
+          <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
+          <input v-model.number="customCharge.cena" type="number" min="0" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
+          <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
+        </div>
         <div class="order-list">
           <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
             <div class="order-main">
@@ -422,14 +427,14 @@
                 <table class="stat-table" style="margin-top:15px; width: 100%;">
                   <thead>
                     <tr>
-                      <th style="text-align: left;">Ime</th>
-                      <th style="text-align: right;">Status (Preklopi)</th>
-                      <th style="text-align: right;">Trenutni Dolg</th>
-                      <th style="text-align: right;">Akcije</th>
+                      <th class="player-col-name"><button @click="setPlayerSort('ime')" class="sort-header">Ime <span>{{ playerSortIndicator('ime') }}</span></button></th>
+                      <th class="player-col-center"><button @click="setPlayerSort('tip')" class="sort-header">Status <span>{{ playerSortIndicator('tip') }}</span></button></th>
+                      <th class="player-col-center"><button @click="setPlayerSort('debt')" class="sort-header">Trenutni dolg <span>{{ playerSortIndicator('debt') }}</span></button></th>
+                      <th class="player-col-center"><button @click="setPlayerSort('actions')" class="sort-header">Akcije <span>{{ playerSortIndicator('actions') }}</span></button></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="u in users" :key="u.id">
+                    <tr v-for="u in adminUsers" :key="u.id">
                       <td style="text-align: left; padding: 4px 8px;"><strong>{{ u.ime }}</strong></td>
                       <td style="text-align: right; padding: 4px 8px;">
                         <button @click="toggleUserStatus(u)" :class="['btn-small', u.tip === 'član' ? 'btn-start' : 'btn-warn']" style="padding:4px 12px; font-weight:bold; width: 100px;">
@@ -554,12 +559,42 @@
                   </div>
                 </div>
 
-                <div>
+                <div style="margin-bottom: 25px;">
                   <h4 style="margin-bottom: 10px;">Zgodovina Zapitkov</h4>
                   <div class="auth-buttons" style="display:flex; gap:10px;">
                     <button @click="exportOrdersCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Zgodovino</button>
                     <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
                       ⬆ Uvozi Zgodovino <input type="file" accept=".csv" style="display:none" @change="importOrdersCSV">
+                    </label>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                  <h4 style="margin-bottom: 10px;">Mize & Tarife</h4>
+                  <div class="auth-buttons" style="display:flex; gap:10px;">
+                    <button @click="exportTariffsCSV" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Tarife</button>
+                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                      ⬆ Uvozi Tarife <input type="file" accept=".csv" style="display:none" @change="importTariffsCSV">
+                    </label>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 25px;">
+                  <h4 style="margin-bottom: 10px;">Nastavitve Izgleda</h4>
+                  <div class="auth-buttons" style="display:flex; gap:10px;">
+                    <button @click="exportSettingsJSON" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Nastavitve</button>
+                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                      ⬆ Uvozi Nastavitve <input type="file" accept=".json" style="display:none" @change="importSettingsJSON">
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style="margin-bottom: 10px;">Celoten Backup</h4>
+                  <div class="auth-buttons" style="display:flex; gap:10px;">
+                    <button @click="exportFullBackupJSON" class="btn-start btn-blue" style="flex:1;">⬇ Izvozi Vse</button>
+                    <label class="btn-warn btn-file-upload btn-orange" style="flex:1; margin:0;">
+                      ⬆ Uvozi Vse <input type="file" accept=".json" style="display:none" @change="importFullBackupJSON">
                     </label>
                   </div>
                 </div>
@@ -618,6 +653,7 @@ const adminTabLabels = reactive({ ...defaultAdminTabLabels, ...(JSON.parse(local
 const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.stringify(adminTabLabels))
 const passInput = ref('')
 const newUser = ref({ ime: '', tip: 'nečlan' })
+const customCharge = ref({ ime: '', cena: null })
 const newCategoryName = ref('')
 const defaultTariffs = [
   { id: 1, kombinacija: 'Član + Član', cena_na_uro: 0 },
@@ -636,6 +672,7 @@ const selectedYear = ref(new Date().getFullYear())
 const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec']
 const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
 const inventorySort = ref({ key: 'ime', dir: 'asc' })
+const playerSort = ref({ key: 'ime', dir: 'asc' })
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
@@ -658,6 +695,16 @@ const setInventorySort = (key) => {
 const inventorySortIndicator = (key) => {
   if (inventorySort.value.key !== key) return ''
   return inventorySort.value.dir === 'asc' ? '▲' : '▼'
+}
+const setPlayerSort = (key) => {
+  playerSort.value = {
+    key,
+    dir: playerSort.value.key === key && playerSort.value.dir === 'asc' ? 'desc' : 'asc'
+  }
+}
+const playerSortIndicator = (key) => {
+  if (playerSort.value.key !== key) return ''
+  return playerSort.value.dir === 'asc' ? '▲' : '▼'
 }
 
 const newDrinkModels = reactive({})
@@ -976,9 +1023,64 @@ const downloadCSV = (csvContent, fileName) => {
   const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = fileName; link.click()
 }
+const downloadJSON = (content, fileName) => {
+  const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json;charset=utf-8;' })
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = fileName; link.click()
+}
+const readJSONFile = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return null
+  try {
+    return JSON.parse(await file.text())
+  } catch {
+    alert('JSON datoteke ne morem prebrati.')
+    return null
+  } finally {
+    event.target.value = ''
+  }
+}
+const todayStamp = () => new Date().toISOString().split('T')[0]
+const buildSettingsBackup = () => ({
+  ui: JSON.parse(JSON.stringify(ui)),
+  adminTabLabels: JSON.parse(JSON.stringify(adminTabLabels)),
+  catOrder: [...catOrder],
+  customCategories: [...customCategories],
+  foldedCategories: [...foldedCategories],
+  inventoryBuys: JSON.parse(JSON.stringify(inventoryBuys)),
+  tablesCount: tables.value.length,
+  specialTariffModifier: specialTariffModifier.value,
+  flatRateActive: flatRateActive.value,
+  flatRateValue: flatRateValue.value
+})
+const applySettingsBackup = (settings = {}) => {
+  if (settings.ui) Object.assign(ui, settings.ui)
+  if (settings.adminTabLabels) Object.assign(adminTabLabels, settings.adminTabLabels)
+  const replaceReactiveArray = (target, value) => {
+    if (Array.isArray(value)) target.splice(0, target.length, ...value)
+  }
+  replaceReactiveArray(catOrder, settings.catOrder)
+  replaceReactiveArray(customCategories, settings.customCategories)
+  replaceReactiveArray(foldedCategories, settings.foldedCategories)
+  replaceReactiveArray(inventoryBuys, settings.inventoryBuys)
+  if (Number.isFinite(Number(settings.tablesCount))) {
+    const count = Math.max(1, Number(settings.tablesCount))
+    tables.value = Array.from({ length: count }, (_, i) => tables.value[i] || { id: i + 1, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null })
+  }
+  if (Number.isFinite(Number(settings.specialTariffModifier))) specialTariffModifier.value = Number(settings.specialTariffModifier)
+  if (typeof settings.flatRateActive === 'boolean') flatRateActive.value = settings.flatRateActive
+  if (Number.isFinite(Number(settings.flatRateValue))) flatRateValue.value = Number(settings.flatRateValue)
+  localStorage.setItem('ciroznaUI', JSON.stringify(ui))
+  saveAdminTabLabels()
+  localStorage.setItem('ciroznaCatOrder', JSON.stringify(catOrder))
+  localStorage.setItem('ciroznaCustomCategories', JSON.stringify(customCategories))
+  localStorage.setItem('ciroznaFoldedCategories', JSON.stringify(foldedCategories))
+  localStorage.setItem('ciroznaInventoryBuys', JSON.stringify(inventoryBuys))
+  initCategoryModels()
+  initPurchaseModels()
+}
 const exportUsersCSV = () => {
   let csv = "player,status\n"; users.value.forEach(u => csv += `"${u.ime}","${u.tip === 'član' ? 'Č' : 'N'}"\n`)
-  downloadCSV(csv, `zrtve_${new Date().toISOString().split('T')[0]}.csv`)
+  downloadCSV(csv, `zrtve_${todayStamp()}.csv`)
 }
 const importUsersCSV = async (event) => {
   const file = event.target.files[0]; if (!file) return;
@@ -997,7 +1099,7 @@ const importUsersCSV = async (event) => {
 const exportDrinksCSV = () => {
   let csv = "ime,cena,cena_clan,kategorija,zaloga,min_zaloga,vrstni_red\n"
   drinks.value.forEach(d => csv += `"${d.ime}",${d.cena},${d.cena_clan || 0},"${d.kategorija}",${d.zaloga || 0},${d.min_zaloga || 5},${d.vrstni_red || 0}\n`)
-  downloadCSV(csv, `omarica_${new Date().toISOString().split('T')[0]}.csv`)
+  downloadCSV(csv, `omarica_${todayStamp()}.csv`)
 }
 const importDrinksCSV = async (event) => {
   const file = event.target.files[0]; if (!file) return;
@@ -1021,7 +1123,7 @@ const exportOrdersCSV = () => {
     const u = users.value.find(x => x.id === o.userId)
     csv += `"${u ? u.ime : 'Neznan'}","${o.ime}",${o.cena},${o.placano ? 'DA' : 'NE'},"${o.created_at}"\n`
   })
-  downloadCSV(csv, `zgodovina_${new Date().toISOString().split('T')[0]}.csv`)
+  downloadCSV(csv, `zgodovina_${todayStamp()}.csv`)
 }
 const importOrdersCSV = async (event) => {
   const file = event.target.files[0]; if (!file) return;
@@ -1037,6 +1139,120 @@ const importOrdersCSV = async (event) => {
     }
   }
   alert(`Uvoz zgodovine končan!`); event.target.value = ''
+}
+const exportTariffsCSV = () => {
+  let csv = "id,kombinacija,cena_na_uro\n"
+  tariffs.value.forEach(t => csv += `${t.id},"${t.kombinacija}",${t.cena_na_uro}\n`)
+  downloadCSV(csv, `tarife_${todayStamp()}.csv`)
+}
+const importTariffsCSV = async (event) => {
+  const file = event.target.files[0]; if (!file) return;
+  const text = await file.text()
+  const rows = text.split('\n').map(r => r.replace(/\r/g, '').trim()).filter(r => r).slice(1)
+  for (let row of rows) {
+    const m = row.match(/(?:\"([^\"]*)\"|([^,]+))/g); if (!m || m.length < 3) continue
+    const id = Number(m[0].replace(/\"/g, '').trim())
+    const kombinacija = m[1].replace(/\"/g, '').trim()
+    const cena_na_uro = Number(m[2].replace(/\"/g, '').trim())
+    const existing = tariffs.value.find(t => t.id === id || t.kombinacija.toLowerCase() === kombinacija.toLowerCase())
+    if (existing) {
+      existing.kombinacija = kombinacija
+      existing.cena_na_uro = cena_na_uro
+      await supabase.from('tariffs').update({ kombinacija, cena_na_uro }).eq('id', existing.id)
+    } else {
+      const { data } = await supabase.from('tariffs').insert([{ id, kombinacija, cena_na_uro }]).select()
+      if (data) tariffs.value.push(data[0])
+    }
+  }
+  alert('Uvoz tarif končan!'); event.target.value = ''
+}
+const exportSettingsJSON = () => downloadJSON(buildSettingsBackup(), `nastavitve_${todayStamp()}.json`)
+const importSettingsJSON = async (event) => {
+  const settings = await readJSONFile(event)
+  if (!settings) return
+  applySettingsBackup(settings.settings || settings)
+  alert('Uvoz nastavitev končan!')
+}
+const exportFullBackupJSON = async () => {
+  const [usersResult, drinksResult, tariffsResult, ordersResult] = await Promise.all([
+    supabase.from('users').select('*'),
+    supabase.from('drinks').select('*'),
+    supabase.from('tariffs').select('*'),
+    supabase.from('orders').select('*')
+  ])
+  const errors = [usersResult.error, drinksResult.error, tariffsResult.error, ordersResult.error].filter(Boolean)
+  if (errors.length) return alert('Nekaterih podatkov ne morem izvoziti, ker baza trenutno ne odgovarja.')
+  downloadJSON({
+    version: 1,
+    exported_at: new Date().toISOString(),
+    users: usersResult.data || [],
+    drinks: drinksResult.data || [],
+    tariffs: tariffsResult.data || [],
+    orders: ordersResult.data || [],
+    settings: buildSettingsBackup()
+  }, `cirozna_backup_${todayStamp()}.json`)
+}
+const normalizeBackupOrder = (order) => ({
+  user_id: order.user_id ?? order.userId,
+  ime_artikla: order.ime_artikla ?? order.ime,
+  znesek: Number(order.znesek ?? order.cena ?? 0),
+  placano: Boolean(order.placano),
+  timestamp: order.timestamp ?? order.created_at ?? new Date().toISOString()
+})
+const importFullBackupJSON = async (event) => {
+  const backup = await readJSONFile(event)
+  if (!backup) return
+  if (!confirm('Uvozim celoten backup? Obstoječih enakih imen ne bom podvajal, zgodovina pa se doda samo, če je še ni.')) return
+
+  if (backup.settings) applySettingsBackup(backup.settings)
+
+  const userIdMap = new Map()
+  for (const user of backup.users || []) {
+    const existingUser = users.value.find(u => String(u.ime).toLowerCase() === String(user.ime).toLowerCase())
+    if (existingUser) {
+      userIdMap.set(String(user.id), existingUser.id)
+    } else {
+      const { data } = await supabase.from('users').insert([{ id: user.id, ime: user.ime, tip: user.tip || 'nečlan' }]).select()
+      if (data?.[0]) {
+        users.value.push(data[0])
+        userIdMap.set(String(user.id), data[0].id)
+      }
+    }
+  }
+
+  for (const drink of backup.drinks || []) {
+    if (!drinks.value.find(d => String(d.ime).toLowerCase() === String(drink.ime).toLowerCase())) {
+      const { data } = await supabase.from('drinks').insert([{ ...drink, active: drink.active !== false }]).select()
+      if (data?.[0] && data[0].active !== false) drinks.value.push(data[0])
+    }
+  }
+
+  for (const tariff of backup.tariffs || []) {
+    const existing = tariffs.value.find(t => t.id === tariff.id || String(t.kombinacija).toLowerCase() === String(tariff.kombinacija).toLowerCase())
+    if (existing) {
+      existing.kombinacija = tariff.kombinacija
+      existing.cena_na_uro = Number(tariff.cena_na_uro || 0)
+      await supabase.from('tariffs').update({ kombinacija: existing.kombinacija, cena_na_uro: existing.cena_na_uro }).eq('id', existing.id)
+    } else {
+      const { data } = await supabase.from('tariffs').insert([{ id: tariff.id, kombinacija: tariff.kombinacija, cena_na_uro: Number(tariff.cena_na_uro || 0) }]).select()
+      if (data?.[0]) tariffs.value.push(data[0])
+    }
+  }
+
+  for (const rawOrder of backup.orders || []) {
+    const order = normalizeBackupOrder(rawOrder)
+    order.user_id = userIdMap.get(String(order.user_id)) ?? order.user_id
+    const exists = allOrders.value.some(o => String(o.userId) === String(order.user_id) && o.ime === order.ime_artikla && Number(o.cena) === Number(order.znesek) && o.created_at === order.timestamp)
+    if (exists) continue
+    const { data } = await supabase.from('orders').insert([order]).select()
+    if (data?.[0]) {
+      const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: data[0].placano, created_at: data[0].timestamp }
+      allOrders.value.push(o); if (!o.placano) currentOrders.value.push(o)
+    }
+  }
+  initCategoryModels()
+  initPurchaseModels()
+  alert('Uvoz celotnega backupa končan!')
 }
 
 const toggleUserStatus = async (user) => {
@@ -1069,8 +1285,18 @@ const sortedUsers = computed(() => {
 })
 
 const getUserDebt = (id) => currentOrders.value.filter(o => o.userId === id).reduce((sum, o) => sum + o.cena, 0)
+const adminUsers = computed(() => {
+  const direction = playerSort.value.dir === 'asc' ? 1 : -1
+  return [...users.value].sort((a, b) => {
+    if (playerSort.value.key === 'debt') return (getUserDebt(a.id) - getUserDebt(b.id)) * direction
+    if (playerSort.value.key === 'tip') return String(a.tip || '').localeCompare(String(b.tip || ''), 'sl', { sensitivity: 'base' }) * direction
+    if (playerSort.value.key === 'actions') return String(a.id || '').localeCompare(String(b.id || ''), 'sl', { numeric: true }) * direction
+    return String(a.ime || '').localeCompare(String(b.ime || ''), 'sl', { sensitivity: 'base' }) * direction
+  })
+})
 const userCurrentOrders = computed(() => activeUser.value ? currentOrders.value.filter(o => o.userId === activeUser.value.id) : [])
 const userTotalTab = computed(() => userCurrentOrders.value.reduce((sum, o) => sum + o.cena, 0))
+const isDrinkOrderName = (name) => drinks.value.some(d => d.ime === name)
 const groupedCurrentOrders = computed(() => {
   const groups = new Map()
   userCurrentOrders.value.forEach((order) => {
@@ -1082,7 +1308,7 @@ const groupedCurrentOrders = computed(() => {
         cena: order.cena,
         total: 0,
         quantity: 0,
-        isDrink: !order.ime.startsWith('Miza'),
+        isDrink: isDrinkOrderName(order.ime),
         orders: []
       })
     }
@@ -1111,11 +1337,25 @@ const addDrink = async (d, priceOverride = null) => {
   }
 }
 
+const addCustomCharge = async () => {
+  if(!activeUser.value) return alert("Izberi žrtev na levi strani najprej!")
+  const name = customCharge.value.ime.trim()
+  const price = Number(customCharge.value.cena || 0)
+  if (!name) return alert('Vpiši ime artikla ali storitve.')
+  if (price <= 0) return alert('Vpiši znesek večji od 0.')
+  const { data } = await supabase.from('orders').insert([{ user_id: activeUser.value.id, ime_artikla: name, znesek: price, placano: false, custom: true }]).select()
+  if(data) {
+    const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: false, created_at: data[0].timestamp, custom: true }
+    currentOrders.value.push(o); allOrders.value.push(o)
+    customCharge.value = { ime: '', cena: null }
+  }
+}
+
 const findDrinkForOrder = (orderName) => drinks.value.find(d => d.ime === orderName)
 
 const deleteOrderAndRestoreStock = async (order) => {
   if (!order) return;
-  if (!order.ime.startsWith('Miza')) {
+  if (isDrinkOrderName(order.ime)) {
     const drink = findDrinkForOrder(order.ime);
     if (drink && drink.zaloga !== null) {
       drink.zaloga++;
@@ -1252,7 +1492,7 @@ const filteredOrdersForStats = computed(() => {
 
 const filteredOrdersForMarket = computed(() => {
   const now = new Date()
-  return allOrders.value.filter(o => !o.ime.startsWith('Miza') && orderMatchesActiveFilter(o, now))
+  return allOrders.value.filter(o => isDrinkOrderName(o.ime) && orderMatchesActiveFilter(o, now))
 })
 
 const topDrunks = computed(() => {
@@ -1267,7 +1507,7 @@ const topDrunks = computed(() => {
 const topArticles = computed(() => {
   const map = {}
   filteredOrdersForStats.value.forEach(o => {
-    if(o.ime.startsWith('Miza')) return;
+    if(!isDrinkOrderName(o.ime)) return;
     if(!map[o.ime]) map[o.ime] = { ime: o.ime, kolicina: 0 }
     map[o.ime].kolicina += 1
   })
@@ -1524,6 +1764,9 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* TAB (ZAPITEK) */
 .tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
+.custom-charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 86px; gap: 6px; align-items: center; margin-bottom: 12px; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
+.custom-charge-name, .custom-charge-price { width: 100%; box-sizing: border-box; }
+.custom-charge-price { text-align: right; }
 .order-list { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
 .order-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 3px; border-bottom: 1px solid var(--border-color); }
 .order-main { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
@@ -1647,9 +1890,13 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .market-table-card .stat-table td:first-child { width: 34%; white-space: normal; }
 .market-col-name { text-align: left !important; }
 .market-col-center { text-align: center !important; }
+.player-col-name { text-align: left !important; }
+.player-col-center { text-align: center !important; }
 .sort-header { width: 100%; display: inline-flex; align-items: center; gap: 4px; border: none; background: transparent; color: #888; font: inherit; font-weight: 800; cursor: pointer; padding: 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .market-col-center .sort-header { justify-content: center; }
 .market-col-name .sort-header { justify-content: flex-start; }
+.player-col-center .sort-header { justify-content: center; }
+.player-col-name .sort-header { justify-content: flex-start; }
 .sort-header:hover { color: var(--text-color); }
 .sort-header span { display: inline-block; width: 9px; flex: 0 0 9px; color: #4caf50; }
 .market-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 0; max-width: 100%; border-radius: 999px; padding: 4px 7px; font-size: 10px; font-weight: bold; color: #fff; white-space: nowrap; }
