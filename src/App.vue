@@ -563,6 +563,46 @@
                       <label class="btn-file-upload btn-slice">Nastavitve <input type="file" accept=".json" style="display:none" @change="importBackupSectionJSON($event, 'settings')"></label>
                     </div>
                   </div>
+                  <div class="backup-schedule-box">
+                    <div class="settings-grid">
+                      <label class="check-row">
+                        <input type="checkbox" v-model="backupSchedule.enabled">
+                        <span>Samodejni email backup</span>
+                      </label>
+                      <label>
+                        <span>Email naslov</span>
+                        <input v-model="backupSchedule.email" type="email" class="input-inline" placeholder="ime@email.com">
+                      </label>
+                      <label>
+                        <span>Ponavljanje</span>
+                        <select v-model="backupSchedule.frequency" class="input-inline">
+                          <option value="daily">Dnevno</option>
+                          <option value="weekly">Tedensko</option>
+                          <option value="monthly">Mesečno</option>
+                          <option value="custom">Po meri</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Ura</span>
+                        <input v-model="backupSchedule.time" type="time" class="input-inline">
+                      </label>
+                      <label v-if="backupSchedule.frequency === 'weekly'">
+                        <span>Dan v tednu</span>
+                        <select v-model.number="backupSchedule.weekday" class="input-inline">
+                          <option v-for="day in scheduleWeekdays" :key="day.value" :value="day.value">{{ day.label }}</option>
+                        </select>
+                      </label>
+                      <label v-if="backupSchedule.frequency === 'monthly'">
+                        <span>Dan v mesecu</span>
+                        <input v-model.number="backupSchedule.dayOfMonth" type="number" min="1" max="31" class="input-inline">
+                      </label>
+                      <label v-if="backupSchedule.frequency === 'custom'">
+                        <span>Vsakih dni</span>
+                        <input v-model.number="backupSchedule.intervalDays" type="number" min="1" max="365" class="input-inline">
+                      </label>
+                    </div>
+                    <button @click="saveBackupSchedule" class="btn-start btn-small backup-schedule-save">Shrani urnik</button>
+                  </div>
                 </div>
 
                 <div class="backup-grid">
@@ -693,6 +733,26 @@ const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep
 const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
 const inventorySort = ref({ key: 'ime', dir: 'asc' })
 const playerSort = ref({ key: 'ime', dir: 'asc' })
+const scheduleWeekdays = [
+  { value: 1, label: 'Ponedeljek' },
+  { value: 2, label: 'Torek' },
+  { value: 3, label: 'Sreda' },
+  { value: 4, label: 'Četrtek' },
+  { value: 5, label: 'Petek' },
+  { value: 6, label: 'Sobota' },
+  { value: 0, label: 'Nedelja' }
+]
+const defaultBackupSchedule = {
+  enabled: false,
+  email: '',
+  frequency: 'weekly',
+  time: '08:00',
+  weekday: 1,
+  dayOfMonth: 1,
+  intervalDays: 7,
+  lastSentKey: ''
+}
+const backupSchedule = reactive({ ...defaultBackupSchedule, ...(JSON.parse(localStorage.getItem('ciroznaBackupSchedule')) || {}) })
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
@@ -837,6 +897,27 @@ const formatDbError = (table, error) => {
   return `${table}: ${statusText}${error.message || 'Neznana napaka'}`
 }
 
+const applyBackupSchedule = (schedule = {}) => {
+  Object.assign(backupSchedule, { ...defaultBackupSchedule, ...schedule })
+  localStorage.setItem('ciroznaBackupSchedule', JSON.stringify(backupSchedule))
+}
+
+const saveSettingDoc = async (key, value) => {
+  const existing = await supabase.from('settings').select('*').eq('key', key)
+  if (existing.error) return existing
+  const payload = { key, value, updated_at: new Date().toISOString() }
+  if (existing.data?.[0]) return await supabase.from('settings').update(payload).eq('id', existing.data[0].id)
+  return await supabase.from('settings').insert([payload]).select()
+}
+
+const saveBackupSchedule = async () => {
+  if (backupSchedule.enabled && !backupSchedule.email.trim()) return alert('Vpiši email naslov za backup.')
+  localStorage.setItem('ciroznaBackupSchedule', JSON.stringify(backupSchedule))
+  const { error } = await saveSettingDoc('backupSchedule', JSON.parse(JSON.stringify(backupSchedule)))
+  if (error) return alert('Urnika ne morem shraniti v bazo.')
+  alert('Urnik backupa je shranjen.')
+}
+
 const toNumber = (value, fallback = 0) => {
   const parsed = Number(String(value ?? '').replace(',', '.'))
   return Number.isFinite(parsed) ? parsed : fallback
@@ -898,6 +979,7 @@ const loadInitialData = async () => {
   const drinksResult = await supabase.from('drinks').select('*').eq('active', true)
   const tariffsResult = await supabase.from('tariffs').select('*')
   const ordersResult = await supabase.from('orders').select('*')
+  const scheduleResult = await supabase.from('settings').select('*').eq('key', 'backupSchedule')
   const errors = [
     formatDbError('users', usersResult.error),
     formatDbError('drinks', drinksResult.error),
@@ -922,6 +1004,7 @@ const loadInitialData = async () => {
     const mappedOrders = ordersResult.data.map(normalizeOrderRow)
     allOrders.value = mappedOrders; currentOrders.value = mappedOrders.filter(order => !order.placano)
   }
+  if (scheduleResult.data?.[0]?.value) applyBackupSchedule(scheduleResult.data[0].value)
 
   applyDefaultTariffToFreeTables()
 
@@ -1125,7 +1208,8 @@ const buildSettingsBackup = () => ({
   tablesCount: tables.value.length,
   specialTariffModifier: specialTariffModifier.value,
   flatRateActive: flatRateActive.value,
-  flatRateValue: flatRateValue.value
+  flatRateValue: flatRateValue.value,
+  backupSchedule: JSON.parse(JSON.stringify(backupSchedule))
 })
 const applySettingsBackup = (settings = {}) => {
   if (settings.ui) Object.assign(ui, settings.ui)
@@ -1144,6 +1228,7 @@ const applySettingsBackup = (settings = {}) => {
   if (Number.isFinite(Number(settings.specialTariffModifier))) specialTariffModifier.value = Number(settings.specialTariffModifier)
   if (typeof settings.flatRateActive === 'boolean') flatRateActive.value = settings.flatRateActive
   if (Number.isFinite(Number(settings.flatRateValue))) flatRateValue.value = Number(settings.flatRateValue)
+  if (settings.backupSchedule) applyBackupSchedule(settings.backupSchedule)
   localStorage.setItem('ciroznaUI', JSON.stringify(ui))
   saveAdminTabLabels()
   localStorage.setItem('ciroznaCatOrder', JSON.stringify(catOrder))
@@ -1973,6 +2058,9 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .backup-slice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 7px; }
 .btn-slice { background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px; font-size: 12px; }
 .btn-slice:hover { border-color: #4caf50; }
+.backup-schedule-box { margin-top: 12px; padding: 10px; border: 1px solid rgba(76,175,80,0.28); border-radius: 8px; background: rgba(0,0,0,0.12); }
+.backup-schedule-box .settings-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.backup-schedule-save { width: auto; min-width: 130px; margin-top: 10px; padding: 9px 12px; }
 
 /* INVENTURA */
 .market-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
