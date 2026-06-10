@@ -86,13 +86,13 @@
         <div v-if="t.status === 'prosta'">
           <select v-model="t.selectedTariff" class="select-field" v-if="!isSpecialTariff || !flatRateActive">
             <option :value="null" disabled>-- Izberi tarifo --</option>
-            <option v-for="tar in tariffs" :key="tar.id" :value="tar">{{ tar.kombinacija }} ({{ tar.cena_na_uro }}€/h)</option>
+            <option v-for="tar in currentTariffs" :key="tar.id" :value="tar">{{ tar.kombinacija }} ({{ tar.cena_na_uro }}€/h)</option>
           </select>
           <div v-else class="flat-rate-notice">Velja enotna tarifa: {{ flatRateValue.toFixed(2) }}€/h</div>
           
           <select v-model="t.payer" class="select-field mt-half">
             <option :value="null" disabled>-- Nosilec plačila --</option>
-            <option v-for="u in users" :key="u.id" :value="u">{{ u.ime }}</option>
+            <option v-for="u in alphabeticalUsers" :key="u.id" :value="u">{{ u.ime }}</option>
           </select>
           <button @click="startTable(t)" class="btn-start mt-half">Začni igro</button>
         </div>
@@ -222,7 +222,14 @@
                 <div class="market-card"><span>Možen profit zaloge</span><strong>{{ marketSummary.potentialProfit.toFixed(2) }} €</strong></div>
                 <div class="market-card"><span>Profit prodaje</span><strong>{{ marketSummary.realizedProfit.toFixed(2) }} €</strong></div>
               </div>
-               <div v-for="cat in uniqueCategories" :key="cat" class="admin-cat-block">
+              <div class="admin-cat-block inventory-sort-panel">
+                <span>Razvrsti inventuro:</span>
+                <button @click="setInventorySort('ime')" :class="['btn-toggle', { active: inventorySort.key === 'ime' }]">Artikel {{ inventorySortIndicator('ime') }}</button>
+                <button @click="setInventorySort('soldQty')" :class="['btn-toggle', { active: inventorySort.key === 'soldQty' }]">Prodano {{ inventorySortIndicator('soldQty') }}</button>
+                <button @click="setInventorySort('realizedProfit')" :class="['btn-toggle', { active: inventorySort.key === 'realizedProfit' }]">Profit {{ inventorySortIndicator('realizedProfit') }}</button>
+                <button @click="setInventorySort('potentialProfit')" :class="['btn-toggle', { active: inventorySort.key === 'potentialProfit' }]">Zaloga prof. {{ inventorySortIndicator('potentialProfit') }}</button>
+              </div>
+               <div v-for="cat in sortedInventoryCategories" :key="cat" class="admin-cat-block">
                 <div class="cat-header">
                   <h3>{{ cat }} - Stanje</h3>
                   <button @click="toggleCategoryFold('inventura', cat)" class="fold-btn" :title="isCategoryFolded('inventura', cat) ? 'Odpri kategorijo' : 'Zapri kategorijo'">
@@ -230,7 +237,7 @@
                   </button>
                 </div>
                 <div v-show="!isCategoryFolded('inventura', cat)">
-                <div v-for="d in sortedDrinks.filter(x => x.kategorija === cat)" :key="d.id" class="inventory-item">
+                <div v-for="d in sortedInventoryDrinks(cat)" :key="d.id" class="inventory-item">
                   <div class="inventory-title">
                     <strong>{{ d.ime }}</strong>
                   </div>
@@ -293,7 +300,7 @@
               </div>
               <div class="admin-cat-block">
                 <h3>Urejanje standardnih tarif miz</h3>
-                <div v-for="tar in tariffs" :key="tar.id" class="admin-item">
+                <div v-for="tar in currentTariffs" :key="tar.id" class="admin-item">
                   <input v-model="tar.kombinacija" class="input-inline name-input" disabled>
                   <input v-model.number="tar.cena_na_uro" type="number" step="0.5" class="input-inline price-input" style="width: 70px;" @change="updateTariffDB(tar)">
                   <span class="currency">€/h</span>
@@ -389,7 +396,7 @@
                       <th class="market-col-center"><button @click="setMarketSort('soldQty')" class="sort-header">Prodano <span>{{ marketSortIndicator('soldQty') }}</span></button></th>
                       <th class="market-col-center"><button @click="setMarketSort('realizedProfit')" class="sort-header">Profit <span>{{ marketSortIndicator('realizedProfit') }}</span></button></th>
                       <th class="market-col-center"><button @click="setMarketSort('stockValue')" class="sort-header">Zaloga € <span>{{ marketSortIndicator('stockValue') }}</span></button></th>
-                      <th class="market-col-center"><button @click="setMarketSort('suggestion')" class="sort-header">Akcija <span>{{ marketSortIndicator('suggestion') }}</span></button></th>
+                      <th class="market-col-center"><button @click="setMarketSort('suggestion')" class="sort-header">Predlog <span>{{ marketSortIndicator('suggestion') }}</span></button></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -515,7 +522,7 @@
                   <label><span>Meja</span><input v-model="ui.inventoryLimitLabel" type="text" class="input-inline"></label>
                   <label><span>Prodano</span><input v-model="ui.inventorySoldLabel" type="text" class="input-inline"></label>
                   <label><span>Profit</span><input v-model="ui.inventoryProfitLabel" type="text" class="input-inline"></label>
-                  <label><span>Zalog prof.</span><input v-model="ui.inventoryStockProfitLabel" type="text" class="input-inline"></label>
+                  <label><span>Zaloga prof.</span><input v-model="ui.inventoryStockProfitLabel" type="text" class="input-inline"></label>
                   <label><span>Gumb nakupa</span><input v-model="ui.inventoryAddBuyLabel" type="text" class="input-inline"></label>
                 </div>
                 <button @click="saveUISettings" class="btn-start mt-15">Shrani Nastavitve</button>
@@ -628,6 +635,7 @@ const selectedMonth = ref(new Date().getMonth())
 const selectedYear = ref(new Date().getFullYear())
 const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec']
 const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
+const inventorySort = ref({ key: 'ime', dir: 'asc' })
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
@@ -641,11 +649,27 @@ const marketSortIndicator = (key) => {
   if (marketSort.value.key !== key) return ''
   return marketSort.value.dir === 'asc' ? '▲' : '▼'
 }
+const setInventorySort = (key) => {
+  inventorySort.value = {
+    key,
+    dir: inventorySort.value.key === key && inventorySort.value.dir === 'asc' ? 'desc' : 'asc'
+  }
+}
+const inventorySortIndicator = (key) => {
+  if (inventorySort.value.key !== key) return ''
+  return inventorySort.value.dir === 'asc' ? '▲' : '▼'
+}
 
 const newDrinkModels = reactive({})
 const purchaseDrafts = reactive({})
 const inventoryBuys = reactive(JSON.parse(localStorage.getItem('ciroznaInventoryBuys')) || [])
 watch(inventoryBuys, (newVal) => localStorage.setItem('ciroznaInventoryBuys', JSON.stringify(newVal)), { deep: true })
+watch(activeUser, (user) => {
+  if (!user) return
+  tables.value.forEach((table) => {
+    if (table.status === 'prosta') table.payer = user
+  })
+})
 
 const defaultUI = {
   theme: 'dark',
@@ -667,7 +691,7 @@ const defaultUI = {
   inventoryLimitLabel: 'Meja',
   inventorySoldLabel: 'Prodano',
   inventoryProfitLabel: 'Profit',
-  inventoryStockProfitLabel: 'Zalog prof.',
+  inventoryStockProfitLabel: 'Zaloga prof.',
   inventoryAddBuyLabel: 'Dodaj nakup'
 }
 const ui = reactive({ ...defaultUI, ...(JSON.parse(localStorage.getItem('ciroznaUI')) || {}) })
@@ -675,6 +699,7 @@ if (ui.inventoryQtyLabel === 'Kupi kosov') ui.inventoryQtyLabel = 'Kosov'
 if (ui.inventoryBuyLabel === 'Nabavna €/kos') ui.inventoryBuyLabel = 'Nabavna'
 if (ui.inventorySellLabel === 'Prodajna €/kos') ui.inventorySellLabel = 'Prodajna'
 if (ui.inventoryStockProfitLabel === 'Zaloga profit') ui.inventoryStockProfitLabel = 'Zalog prof.'
+if (ui.inventoryStockProfitLabel === 'Zalog prof.') ui.inventoryStockProfitLabel = 'Zaloga prof.'
 
 const saveUISettings = () => { localStorage.setItem('ciroznaUI', JSON.stringify(ui)); alert('Nastavitve shranjene!'); }
 
@@ -787,6 +812,7 @@ onMounted(loadInitialData)
 
 // Item sorting logic that actually commits array indexes properly
 const sortedDrinks = computed(() => [...drinks.value].sort((a, b) => a.vrstni_red - b.vrstni_red || a.id - b.id))
+const alphabeticalUsers = computed(() => [...users.value].sort((a, b) => a.ime.localeCompare(b.ime, 'sl', { sensitivity: 'base' })))
 
 const initCategoryModels = () => {
   uniqueCategories.value.forEach(cat => {
@@ -1266,16 +1292,16 @@ const marketRows = computed(() => {
     let suggestionClass = ''
 
     if (stock <= minStock && soldQty > 0 && marginPct >= 25) {
-      suggestion = 'Obnovi'
+      suggestion = 'Obnovi zalogo'
       suggestionClass = 'renew'
     } else if (buyPrice > 0 && marginPct < 20) {
       suggestion = 'Dvigni ceno'
       suggestionClass = 'raise'
     } else if (stock > minStock * 2 && soldQty === 0) {
-      suggestion = 'Znižaj / test'
+      suggestion = 'Počasna prodaja'
       suggestionClass = 'lower'
     } else if (soldQty >= 3 && marginPct >= 45) {
-      suggestion = 'Top artikel'
+      suggestion = 'Top prodaja'
       suggestionClass = 'top'
     }
 
@@ -1327,6 +1353,36 @@ const getMarketRow = (drink) => {
   }
 }
 
+const compareInventoryValues = (a, b, key) => {
+  if (key === 'ime') return a.ime.localeCompare(b.ime, 'sl', { sensitivity: 'base' })
+  return (Number(a[key]) || 0) - (Number(b[key]) || 0)
+}
+
+const sortInventoryRows = (rows) => {
+  const direction = inventorySort.value.dir === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => compareInventoryValues(a, b, inventorySort.value.key) * direction)
+}
+
+const inventoryRowsForCategory = (cat) => {
+  return sortedDrinks.value
+    .filter(drink => drink.kategorija === cat)
+    .map(drink => ({ drink, ...getMarketRow(drink) }))
+}
+
+const sortedInventoryDrinks = (cat) => sortInventoryRows(inventoryRowsForCategory(cat)).map(row => row.drink)
+
+const inventoryCategoryRows = computed(() => uniqueCategories.value.map(cat => {
+  const rows = inventoryRowsForCategory(cat)
+  return {
+    ime: cat,
+    soldQty: rows.reduce((sum, row) => sum + row.soldQty, 0),
+    realizedProfit: rows.reduce((sum, row) => sum + row.realizedProfit, 0),
+    potentialProfit: rows.reduce((sum, row) => sum + row.potentialProfit, 0)
+  }
+}))
+
+const sortedInventoryCategories = computed(() => sortInventoryRows(inventoryCategoryRows.value).map(row => row.ime))
+
 const weekdayChartData = computed(() => {
   const daysMap = [{ name: 'Pon', amount: 0 }, { name: 'Tor', amount: 0 }, { name: 'Sre', amount: 0 }, { name: 'Čet', amount: 0 }, { name: 'Pet', amount: 0 }, { name: 'Sob', amount: 0 }, { name: 'Ned', amount: 0 }];
   filteredOrdersForStats.value.forEach(o => {
@@ -1338,7 +1394,7 @@ const weekdayChartData = computed(() => {
   return daysMap.map(d => ({ ...d, height: (d.amount / maxAmount) * 100 }));
 });
 
-const currentTariffs = computed(() => tariffs.value)
+const currentTariffs = computed(() => [...tariffs.value].sort((a, b) => a.id - b.id || a.kombinacija.localeCompare(b.kombinacija, 'sl', { sensitivity: 'base' })))
 
 const startTable = (t) => { 
   if (!t.payer) { alert('Izberi nosilca plačila!'); return; }
@@ -1542,6 +1598,9 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .market-card { background: linear-gradient(135deg, rgba(76,175,80,0.2), rgba(25,118,210,0.12)); border: 1px solid rgba(76,175,80,0.28); border-radius: 8px; padding: 14px; text-align: left; }
 .market-card span { display: block; color: #aaa; font-size: 12px; font-weight: bold; margin-bottom: 6px; }
 .market-card strong { color: var(--text-color); font-size: 22px; }
+.inventory-sort-panel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px; }
+.inventory-sort-panel span { color: #aaa; font-size: 12px; font-weight: 800; margin-right: 2px; }
+.inventory-sort-panel .btn-toggle { flex: 0 0 auto; width: auto; padding: 7px 10px; font-size: 12px; }
 .inventory-item { display: grid; grid-template-columns: minmax(90px, 0.7fr) minmax(180px, 0.8fr) auto minmax(305px, auto); gap: 7px; padding: 12px 0; border-bottom: 1px dashed var(--border-color); align-items: center; }
 .inventory-title { display: flex; flex-direction: column; gap: 5px; text-align: left; min-width: 0; }
 .inventory-title strong { color: var(--text-color); font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
