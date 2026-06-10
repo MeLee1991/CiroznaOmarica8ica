@@ -101,6 +101,9 @@
           <div class="active-tariff-display">
             {{ (isSpecialTariff && flatRateActive) ? 'Enotna: ' + flatRateValue.toFixed(2) : (t.selectedTariff?.kombinacija + ' (' + t.selectedTariff?.cena_na_uro.toFixed(2) + ')') }} €/h
           </div>
+          <div class="active-payer-display">
+            Nosilec: {{ t.lockedPayer?.ime || t.payer?.ime || 'Neznan' }}
+          </div>
 
           <div class="timer">{{ formatTime(t.elapsedSeconds) }}</div>
           <div class="current-cost">{{ t.currentCost.toFixed(2) }} €</div>
@@ -1806,6 +1809,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .mt-half { margin-top: 8px; }
 .timer-section { text-align: center; }
 .active-tariff-display { color: #888; font-size: 13px; background: var(--input-bg); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 5px; border: 1px solid var(--border-color); }
+.active-payer-display { color: var(--text-color); font-size: 13px; font-weight: 800; margin: 0 0 5px; }
 .timer { font-size: 32px; font-family: monospace; font-weight: bold; color: #4caf50; margin: 5px 0; }
 .current-cost { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
 .table-controls { display: flex; gap: 10px; }
