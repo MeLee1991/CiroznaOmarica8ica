@@ -98,11 +98,9 @@
         </div>
         
         <div v-else class="timer-section">
-          <div class="active-tariff-display">
-            {{ (isSpecialTariff && flatRateActive) ? 'Enotna: ' + flatRateValue.toFixed(2) : (t.selectedTariff?.kombinacija + ' (' + t.selectedTariff?.cena_na_uro.toFixed(2) + ')') }} €/h
-          </div>
-          <div class="active-payer-display">
-            Nosilec: {{ t.lockedPayer?.ime || t.payer?.ime || 'Neznan' }}
+          <div class="active-table-meta">
+            <span>{{ (isSpecialTariff && flatRateActive) ? 'Enotna: ' + flatRateValue.toFixed(2) : (t.selectedTariff?.kombinacija + ' (' + t.selectedTariff?.cena_na_uro.toFixed(2) + ')') }} €/h</span>
+            <strong>Nosilec: {{ t.lockedPayer?.ime || t.payer?.ime || 'Neznan' }}</strong>
           </div>
 
           <div class="timer">{{ formatTime(t.elapsedSeconds) }}</div>
@@ -863,6 +861,21 @@ const normalizeOrderRow = (dbOrder) => ({
   created_at: dbOrder.timestamp || new Date().toISOString()
 })
 
+const getDefaultTableTariff = () => (
+  tariffs.value.find(t => normalizedText(t.kombinacija).toLowerCase() === 'član + nečlan')
+  || tariffs.value.find(t => normalizedText(t.kombinacija).toLowerCase().includes('nečlan'))
+  || tariffs.value[0]
+  || null
+)
+
+const applyDefaultTariffToFreeTables = () => {
+  const defaultTariff = getDefaultTableTariff()
+  if (!defaultTariff) return
+  tables.value.forEach((table) => {
+    if (table.status === 'prosta' && !table.selectedTariff) table.selectedTariff = defaultTariff
+  })
+}
+
 const loadInitialData = async () => {
   dbLoading.value = true
   dbError.value = ''
@@ -895,6 +908,8 @@ const loadInitialData = async () => {
     const mappedOrders = ordersResult.data.map(normalizeOrderRow)
     allOrders.value = mappedOrders; currentOrders.value = mappedOrders.filter(order => !order.placano)
   }
+
+  applyDefaultTariffToFreeTables()
 
   if (errors.length) dbError.value = errors.join(' | ')
   dbLoading.value = false
@@ -1210,6 +1225,7 @@ const importTariffsCSV = async (event) => {
       if (data) tariffs.value.push(data[0])
     }
   }
+  applyDefaultTariffToFreeTables()
   alert('Uvoz tarif končan!'); event.target.value = ''
 }
 const exportSettingsJSON = () => downloadJSON(buildSettingsBackup(), `nastavitve_${todayStamp()}.json`)
@@ -1723,10 +1739,10 @@ const stopTable = async (t) => {
        currentOrders.value.push(o); allOrders.value.push(o)
     }
   }
-  t.status = 'prosta'; t.payer = activeUser.value || null; t.lockedPayer = null; t.selectedTariff = null; t.elapsedSeconds = 0; t.currentCost = 0; 
+  t.status = 'prosta'; t.payer = activeUser.value || null; t.lockedPayer = null; t.selectedTariff = getDefaultTableTariff(); t.elapsedSeconds = 0; t.currentCost = 0; 
 }
 
-const addTable = () => { tables.value.push({ id: tables.value.length + 1, status: 'prosta', payer: activeUser.value || null, lockedPayer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null }) }
+const addTable = () => { tables.value.push({ id: tables.value.length + 1, status: 'prosta', payer: activeUser.value || null, lockedPayer: null, selectedTariff: getDefaultTableTariff(), elapsedSeconds: 0, currentCost: 0, interval: null }) }
 const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
@@ -1798,8 +1814,8 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .member-price-tag { font-size: 0.8em; opacity: 0.8; margin-top: 3px; font-weight: normal; }
 
 /* TABLES */
-.table-card { background: var(--item-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color); }
-.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.table-card { background: var(--item-bg); padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color); }
+.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .table-header h3 { margin: 0; }
 .flat-rate-notice { background: #4a2333; color: white; padding: 10px; border-radius: 6px; text-align: center; font-size: 14px; font-weight: bold; }
 .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
@@ -1808,11 +1824,13 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .select-field { width: 100%; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
 .mt-half { margin-top: 8px; }
 .timer-section { text-align: center; }
-.active-tariff-display { color: #888; font-size: 13px; background: var(--input-bg); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 5px; border: 1px solid var(--border-color); }
-.active-payer-display { color: var(--text-color); font-size: 13px; font-weight: 800; margin: 0 0 5px; }
-.timer { font-size: 32px; font-family: monospace; font-weight: bold; color: #4caf50; margin: 5px 0; }
-.current-cost { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+.active-table-meta { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; color: #888; font-size: 12px; margin: 0 0 3px; line-height: 1.2; }
+.active-table-meta strong { color: var(--text-color); font-weight: 800; }
+.timer { font-size: 29px; font-family: monospace; font-weight: bold; color: #4caf50; margin: 0; line-height: 1.02; }
+.current-cost { font-size: 16px; font-weight: bold; margin-bottom: 7px; line-height: 1.1; }
 .table-controls { display: flex; gap: 10px; }
+.table-controls .btn-warn,
+.table-controls .btn-stop { padding: 10px; }
 .btn-start { background: #2e7d32; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
 .btn-stop { background: #c62828; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
 .btn-warn { background: #f57c00; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
