@@ -612,6 +612,11 @@ const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.s
 const passInput = ref('')
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const newCategoryName = ref('')
+const defaultTariffs = [
+  { id: 1, kombinacija: 'Član + Član', cena_na_uro: 0 },
+  { id: 2, kombinacija: 'Član + Nečlan', cena_na_uro: 5 },
+  { id: 3, kombinacija: 'Nečlan + Nečlan', cena_na_uro: 10 }
+]
 
 const isSpecialTariff = ref(false)
 const specialTariffModifier = ref(0) 
@@ -755,7 +760,17 @@ const loadInitialData = async () => {
 
   if(usersResult.data) users.value = usersResult.data
   if(drinksResult.data) { drinks.value = drinksResult.data; initCategoryModels(); initPurchaseModels() }
-  if(tariffsResult.data) tariffs.value = tariffsResult.data
+  if(tariffsResult.data) {
+    if (tariffsResult.data.length) tariffs.value = tariffsResult.data
+    else {
+      const seededTariffs = []
+      for (const tariff of defaultTariffs) {
+        const { data } = await supabase.from('tariffs').insert([tariff]).select()
+        if (data?.[0]) seededTariffs.push(data[0])
+      }
+      tariffs.value = seededTariffs.length ? seededTariffs : defaultTariffs
+    }
+  }
   if(ordersResult.data) {
     const mappedOrders = ordersResult.data.map(dbOrder => ({
       id: dbOrder.id, userId: dbOrder.user_id, ime: dbOrder.ime_artikla,

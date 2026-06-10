@@ -94,6 +94,25 @@ const existsByField = async (db, table, field, value) => {
   return !snapshot.empty
 }
 
+const importTariffs = async (db) => {
+  const defaults = [
+    { id: 1, kombinacija: 'Član + Član', cena_na_uro: 0 },
+    { id: 2, kombinacija: 'Član + Nečlan', cena_na_uro: 5 },
+    { id: 3, kombinacija: 'Nečlan + Nečlan', cena_na_uro: 10 }
+  ]
+  let inserted = 0
+  let skipped = 0
+  for (const tariff of defaults) {
+    if (await existsByField(db, 'tariffs', 'kombinacija', tariff.kombinacija)) {
+      skipped++
+      continue
+    }
+    await addDoc(collection(db, 'tariffs'), tariff)
+    inserted++
+  }
+  return { inserted, skipped }
+}
+
 const importUsers = async (db, file) => {
   const rows = parseCsv(await readFile(file, 'utf8')).slice(1)
   let inserted = 0
@@ -155,6 +174,10 @@ const main = async () => {
   console.log(`Importing drinks from: ${drinksPath}`)
   const drinks = await importDrinks(db, drinksPath)
   console.log(`Drinks: ${drinks.inserted} inserted, ${drinks.skipped} skipped`)
+
+  console.log('Importing default tariffs')
+  const tariffs = await importTariffs(db)
+  console.log(`Tariffs: ${tariffs.inserted} inserted, ${tariffs.skipped} skipped`)
 }
 
 main()
