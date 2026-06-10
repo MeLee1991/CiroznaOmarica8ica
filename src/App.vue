@@ -1,5 +1,10 @@
 <template>
   <div class="kiosk-container" :class="ui.theme" :style="customCssVars">
+    <div v-if="dbError" class="db-error-banner">
+      <strong>Baza trenutno ni dosegljiva.</strong>
+      <span>{{ dbError }}</span>
+      <button @click="loadInitialData" :disabled="dbLoading">{{ dbLoading ? 'Preverjam...' : 'Poskusi znova' }}</button>
+    </div>
     
     <!-- 1. LEFT COLUMN: VICTIMS -->
     <div class="panel">
@@ -578,6 +583,8 @@ const drinks = ref([])
 const tariffs = ref([])
 const allOrders = ref([])
 const currentOrders = ref([])
+const dbError = ref('')
+const dbLoading = ref(false)
 
 const tables = ref([
   { id: 1, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null },
@@ -725,22 +732,43 @@ const moveCategory = (cat, direction) => {
   }
 }
 
-onMounted(async () => {
-  const { data: u } = await supabase.from('users').select('*')
-  if(u) users.value = u
-  const { data: d } = await supabase.from('drinks').select('*').eq('active', true)
-  if(d) { drinks.value = d; initCategoryModels(); initPurchaseModels() }
-  const { data: t } = await supabase.from('tariffs').select('*')
-  if(t) tariffs.value = t
-  const { data: o } = await supabase.from('orders').select('*')
-  if(o) {
-    const mappedOrders = o.map(dbOrder => ({
+const formatDbError = (table, error) => {
+  if (!error) return ''
+  const statusText = error.code ? `${error.code}: ` : ''
+  return `${table}: ${statusText}${error.message || 'Neznana napaka'}`
+}
+
+const loadInitialData = async () => {
+  dbLoading.value = true
+  dbError.value = ''
+
+  const usersResult = await supabase.from('users').select('*')
+  const drinksResult = await supabase.from('drinks').select('*').eq('active', true)
+  const tariffsResult = await supabase.from('tariffs').select('*')
+  const ordersResult = await supabase.from('orders').select('*')
+  const errors = [
+    formatDbError('users', usersResult.error),
+    formatDbError('drinks', drinksResult.error),
+    formatDbError('tariffs', tariffsResult.error),
+    formatDbError('orders', ordersResult.error)
+  ].filter(Boolean)
+
+  if(usersResult.data) users.value = usersResult.data
+  if(drinksResult.data) { drinks.value = drinksResult.data; initCategoryModels(); initPurchaseModels() }
+  if(tariffsResult.data) tariffs.value = tariffsResult.data
+  if(ordersResult.data) {
+    const mappedOrders = ordersResult.data.map(dbOrder => ({
       id: dbOrder.id, userId: dbOrder.user_id, ime: dbOrder.ime_artikla,
       cena: dbOrder.znesek, placano: dbOrder.placano, created_at: dbOrder.timestamp
     }))
     allOrders.value = mappedOrders; currentOrders.value = mappedOrders.filter(order => !order.placano)
   }
-})
+
+  if (errors.length) dbError.value = errors.join(' | ')
+  dbLoading.value = false
+}
+
+onMounted(loadInitialData)
 
 // Item sorting logic that actually commits array indexes properly
 const sortedDrinks = computed(() => [...drinks.value].sort((a, b) => a.vrstni_red - b.vrstni_red || a.id - b.id))
@@ -1352,6 +1380,10 @@ const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) adminAuth.value
 
 /* GLOBAL & LAYOUT */
 .kiosk-container { display: grid; grid-template-columns: minmax(210px, 0.85fr) minmax(320px, 1.25fr) minmax(340px, 1.3fr); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box;   height: 100dvh; overflow: hidden; }
+.db-error-banner { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 10px; max-width: min(920px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 8px; background: #3b1f1f; border: 1px solid #ff5252; color: #fff; box-shadow: 0 12px 28px rgba(0,0,0,0.35); font-size: 13px; }
+.db-error-banner span { color: #ffd6d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-error-banner button { border: none; border-radius: 6px; padding: 7px 10px; background: #ff5252; color: white; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.db-error-banner button:disabled { opacity: 0.6; cursor: wait; }
 .panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; overflow-y: auto; border: 1px solid var(--border-color); overflow-y: auto; padding-bottom: 120px !important; }
 
 h2, h3, h4 { color: var(--text-color); margin-top: 0; }
