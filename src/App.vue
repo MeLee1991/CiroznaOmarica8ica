@@ -112,8 +112,13 @@
       </div>
 
       <div v-if="activeUser" class="tab-section">
-        <h3>Zapitek: {{ activeUser.ime }}</h3>
-        <div class="custom-charge-row">
+        <div class="tab-title-row">
+          <h3>Zapitek: {{ activeUser.ime }}</h3>
+          <button @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
+            {{ showCustomCharge ? '−' : '+' }}
+          </button>
+        </div>
+        <div v-if="showCustomCharge" class="custom-charge-row">
           <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
           <input v-model.number="customCharge.cena" type="number" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
           <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
@@ -654,6 +659,7 @@ const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.s
 const passInput = ref('')
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const customCharge = ref({ ime: '', cena: null })
+const showCustomCharge = ref(false)
 const newCategoryName = ref('')
 const defaultTariffs = [
   { id: 1, kombinacija: 'Član + Član', cena_na_uro: 0 },
@@ -712,6 +718,7 @@ const purchaseDrafts = reactive({})
 const inventoryBuys = reactive(JSON.parse(localStorage.getItem('ciroznaInventoryBuys')) || [])
 watch(inventoryBuys, (newVal) => localStorage.setItem('ciroznaInventoryBuys', JSON.stringify(newVal)), { deep: true })
 watch(activeUser, (user) => {
+  showCustomCharge.value = false
   if (!user) return
   tables.value.forEach((table) => {
     if (table.status === 'prosta') table.payer = user
@@ -1315,7 +1322,7 @@ const editUser = async (u) => {
 const sortedUsers = computed(() => {
   return [...users.value].filter(u => normalizedText(u.ime).toLowerCase().includes(search.value.toLowerCase())).sort((a,b) => {
         const debtA = getUserDebt(a.id), debtB = getUserDebt(b.id)
-        if((debtA > 0) !== (debtB > 0)) return debtB > 0 ? 1 : -1 
+        if((debtA !== 0) !== (debtB !== 0)) return debtA !== 0 ? -1 : 1
         return normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' }) 
     })
 })
@@ -1384,6 +1391,7 @@ const addCustomCharge = async () => {
     const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: false, created_at: data[0].timestamp, custom: true }
     currentOrders.value.push(o); allOrders.value.push(o)
     customCharge.value = { ime: '', cena: null }
+    showCustomCharge.value = false
   }
 }
 
@@ -1803,6 +1811,10 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* TAB (ZAPITEK) */
 .tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
+.tab-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+.tab-title-row h3 { margin: 0; }
+.custom-charge-toggle { background: #2e7d32; }
+.custom-charge-toggle.active { background: #c62828; }
 .custom-charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 86px; gap: 6px; align-items: center; margin-bottom: 12px; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
 .custom-charge-name, .custom-charge-price { width: 100%; box-sizing: border-box; }
 .custom-charge-price { text-align: right; }
@@ -1811,13 +1823,14 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .order-main { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
 .order-name { width: 100%; font-weight: bold; font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .order-meta { color: #888; font-size: 11px; line-height: 1.2; white-space: nowrap; }
-.order-controls { display: grid; grid-template-columns: 52px 28px 16px 28px 26px; align-items: center; justify-content: end; gap: 4px; flex: 0 0 auto; }
+.order-controls { display: grid; grid-template-columns: 70px 28px 16px 28px 30px; align-items: center; justify-content: end; column-gap: 6px; row-gap: 4px; flex: 0 0 auto; }
 .order-total { font-weight: bold; font-size: 15px; white-space: nowrap; text-align: right; }
 .order-qty { min-width: 0; text-align: center; font-size: 15px; font-weight: bold; }
 .btn-qty { width: 28px; height: 30px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 17px; font-weight: bold; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .btn-qty-minus { background: #c62828; }
 .btn-qty-plus { background: #2e7d32; }
 .btn-del-mini { background: #c62828; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+.order-controls .btn-del-mini { grid-column: 5; }
 .tab-actions { display: flex; gap: 10px; align-items: stretch; }
 .btn-pay { background: #1976d2; color: white; border: none; padding: 15px; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 16px; }
 .empty-state { text-align: center; padding: 30px; color: #888; font-style: italic; }
