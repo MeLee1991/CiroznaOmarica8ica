@@ -34,7 +34,7 @@
 
           <div class="user-actions">
 
-            <span v-if="getUserDebt(user.id) > 0" class="debt-warning">{{ getUserDebt(user.id).toFixed(2) }} €</span>
+            <span v-if="getUserDebt(user.id) !== 0" :class="getUserDebt(user.id) > 0 ? 'debt-warning' : 'credit-warning'">{{ getUserDebt(user.id).toFixed(2) }} €</span>
             <button @click.stop="editUser(user)" class="btn-icon">✎</button>
             <!-- <button @click.stop="deleteUser(user)" class="btn-icon btn-del-red">✖</button> -->
           </div>
@@ -115,7 +115,7 @@
         <h3>Zapitek: {{ activeUser.ime }}</h3>
         <div class="custom-charge-row">
           <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
-          <input v-model.number="customCharge.cena" type="number" min="0" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
+          <input v-model.number="customCharge.cena" type="number" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
           <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
         </div>
         <div class="order-list">
@@ -136,9 +136,9 @@
           </div>
         </div>
         
-        <div v-if="userTotalTab > 0" class="tab-actions">
+        <div v-if="userCurrentOrders.length > 0" class="tab-actions">
           <button @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
-          <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">Plačaj ({{ userTotalTab.toFixed(2) }} €)</button>
+          <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
         </div>
       </div>
       <div v-else class="empty-state">Izberi žrtev za prikaz računa.</div>
@@ -441,7 +441,7 @@
                           {{ u.tip === 'član' ? 'Član (Č)' : 'Nečlan (N)' }}
                         </button>
                       </td>
-                      <td style="text-align: right; padding: 4px 8px;" :style="{ color: getUserDebt(u.id) > 0 ? '#ff5252' : 'inherit', fontWeight: 'bold' }">{{ getUserDebt(u.id).toFixed(2) }} €</td>
+                      <td style="text-align: right; padding: 4px 8px;" :style="{ color: getUserDebt(u.id) > 0 ? '#ff5252' : (getUserDebt(u.id) < 0 ? '#4caf50' : 'inherit'), fontWeight: 'bold' }">{{ getUserDebt(u.id).toFixed(2) }} €</td>
                       <td style="text-align: right; padding: 4px 8px;">
                         <button @click="editUser(u)" class="btn-icon">✎</button>
                         <button @click="deleteUser(u)" class="btn-icon btn-del-red">✖</button>
@@ -1376,9 +1376,9 @@ const addDrink = async (d, priceOverride = null) => {
 const addCustomCharge = async () => {
   if(!activeUser.value) return alert("Izberi žrtev na levi strani najprej!")
   const name = normalizedText(customCharge.value.ime).trim()
-  const price = Number(customCharge.value.cena || 0)
+  const price = toNumber(customCharge.value.cena, NaN)
   if (!name) return alert('Vpiši ime artikla ali storitve.')
-  if (price <= 0) return alert('Vpiši znesek večji od 0.')
+  if (!Number.isFinite(price) || price === 0) return alert('Vpiši znesek različen od 0.')
   const { data } = await supabase.from('orders').insert([{ user_id: activeUser.value.id, ime_artikla: name, znesek: price, placano: false, custom: true }]).select()
   if(data) {
     const o = { id: data[0].id, userId: data[0].user_id, ime: data[0].ime_artikla, cena: data[0].znesek, placano: false, created_at: data[0].timestamp, custom: true }
@@ -1763,6 +1763,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 .user-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
 .debt-warning { color: #ff5252; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
+.credit-warning { color: #4caf50; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
 .user-badge-static { font-size: 10px; color: white; padding: 1px 4px; border-radius: 3px; font-weight: bold; width: 12px; text-align: center;}
 .badge-clan { background: #2980b9; }
 .badge-neclan { background: #555; }
