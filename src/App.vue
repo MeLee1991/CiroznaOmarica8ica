@@ -815,6 +815,44 @@ const formatDbError = (table, error) => {
   return `${table}: ${statusText}${error.message || 'Neznana napaka'}`
 }
 
+const toNumber = (value, fallback = 0) => {
+  const parsed = Number(String(value ?? '').replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const normalizeUserRow = (user) => ({
+  ...user,
+  ime: normalizedText(user?.ime || 'Neznan'),
+  tip: user?.tip === 'član' ? 'član' : 'nečlan'
+})
+
+const normalizeDrinkRow = (drink) => ({
+  ...drink,
+  ime: normalizedText(drink?.ime || 'Brez imena'),
+  cena: toNumber(drink?.cena),
+  cena_clan: drink?.cena_clan == null ? null : toNumber(drink.cena_clan),
+  kategorija: normalizedText(drink?.kategorija || 'Ostalo'),
+  zaloga: toNumber(drink?.zaloga),
+  min_zaloga: toNumber(drink?.min_zaloga, 5),
+  vrstni_red: toNumber(drink?.vrstni_red),
+  active: drink?.active !== false
+})
+
+const normalizeTariffRow = (tariff) => ({
+  ...tariff,
+  kombinacija: normalizedText(tariff?.kombinacija || ''),
+  cena_na_uro: toNumber(tariff?.cena_na_uro)
+})
+
+const normalizeOrderRow = (dbOrder) => ({
+  id: dbOrder.id,
+  userId: dbOrder.user_id,
+  ime: normalizedText(dbOrder.ime_artikla || 'Brez imena'),
+  cena: toNumber(dbOrder.znesek),
+  placano: Boolean(dbOrder.placano),
+  created_at: dbOrder.timestamp || new Date().toISOString()
+})
+
 const loadInitialData = async () => {
   dbLoading.value = true
   dbError.value = ''
@@ -830,10 +868,10 @@ const loadInitialData = async () => {
     formatDbError('orders', ordersResult.error)
   ].filter(Boolean)
 
-  if(usersResult.data) users.value = usersResult.data
-  if(drinksResult.data) { drinks.value = drinksResult.data; initCategoryModels(); initPurchaseModels() }
+  if(usersResult.data) users.value = usersResult.data.map(normalizeUserRow)
+  if(drinksResult.data) { drinks.value = drinksResult.data.map(normalizeDrinkRow); initCategoryModels(); initPurchaseModels() }
   if(tariffsResult.data) {
-    if (tariffsResult.data.length) tariffs.value = tariffsResult.data
+    if (tariffsResult.data.length) tariffs.value = tariffsResult.data.map(normalizeTariffRow)
     else {
       const seededTariffs = []
       for (const tariff of defaultTariffs) {
@@ -844,10 +882,7 @@ const loadInitialData = async () => {
     }
   }
   if(ordersResult.data) {
-    const mappedOrders = ordersResult.data.map(dbOrder => ({
-      id: dbOrder.id, userId: dbOrder.user_id, ime: dbOrder.ime_artikla,
-      cena: dbOrder.znesek, placano: dbOrder.placano, created_at: dbOrder.timestamp
-    }))
+    const mappedOrders = ordersResult.data.map(normalizeOrderRow)
     allOrders.value = mappedOrders; currentOrders.value = mappedOrders.filter(order => !order.placano)
   }
 
@@ -858,8 +893,9 @@ const loadInitialData = async () => {
 onMounted(loadInitialData)
 
 // Item sorting logic that actually commits array indexes properly
-const sortedDrinks = computed(() => [...drinks.value].sort((a, b) => a.vrstni_red - b.vrstni_red || a.id - b.id))
-const alphabeticalUsers = computed(() => [...users.value].sort((a, b) => a.ime.localeCompare(b.ime, 'sl', { sensitivity: 'base' })))
+const normalizedText = (value) => String(value ?? '')
+const sortedDrinks = computed(() => [...drinks.value].sort((a, b) => (Number(a.vrstni_red) || 0) - (Number(b.vrstni_red) || 0) || normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' })))
+const alphabeticalUsers = computed(() => [...users.value].sort((a, b) => normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' })))
 
 const initCategoryModels = () => {
   uniqueCategories.value.forEach(cat => {
@@ -1154,7 +1190,7 @@ const importTariffsCSV = async (event) => {
     const id = Number(m[0].replace(/\"/g, '').trim())
     const kombinacija = m[1].replace(/\"/g, '').trim()
     const cena_na_uro = Number(m[2].replace(/\"/g, '').trim())
-    const existing = tariffs.value.find(t => t.id === id || t.kombinacija.toLowerCase() === kombinacija.toLowerCase())
+    const existing = tariffs.value.find(t => t.id === id || normalizedText(t.kombinacija).toLowerCase() === kombinacija.toLowerCase())
     if (existing) {
       existing.kombinacija = kombinacija
       existing.cena_na_uro = cena_na_uro
@@ -1277,10 +1313,10 @@ const editUser = async (u) => {
 }
 
 const sortedUsers = computed(() => {
-  return [...users.value].filter(u => u.ime.toLowerCase().includes(search.value.toLowerCase())).sort((a,b) => {
+  return [...users.value].filter(u => normalizedText(u.ime).toLowerCase().includes(search.value.toLowerCase())).sort((a,b) => {
         const debtA = getUserDebt(a.id), debtB = getUserDebt(b.id)
         if((debtA > 0) !== (debtB > 0)) return debtB > 0 ? 1 : -1 
-        return a.ime.localeCompare(b.ime) 
+        return normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' }) 
     })
 })
 
@@ -1339,7 +1375,7 @@ const addDrink = async (d, priceOverride = null) => {
 
 const addCustomCharge = async () => {
   if(!activeUser.value) return alert("Izberi žrtev na levi strani najprej!")
-  const name = customCharge.value.ime.trim()
+  const name = normalizedText(customCharge.value.ime).trim()
   const price = Number(customCharge.value.cena || 0)
   if (!name) return alert('Vpiši ime artikla ali storitve.')
   if (price <= 0) return alert('Vpiši znesek večji od 0.')
@@ -1634,7 +1670,9 @@ const weekdayChartData = computed(() => {
   return daysMap.map(d => ({ ...d, height: (d.amount / maxAmount) * 100 }));
 });
 
-const currentTariffs = computed(() => [...tariffs.value].sort((a, b) => a.id - b.id || a.kombinacija.localeCompare(b.kombinacija, 'sl', { sensitivity: 'base' })))
+const currentTariffs = computed(() => [...tariffs.value]
+  .filter(t => t && normalizedText(t.kombinacija))
+  .sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0) || normalizedText(a.kombinacija).localeCompare(normalizedText(b.kombinacija), 'sl', { sensitivity: 'base' })))
 
 const startTable = (t) => { 
   if (!t.payer) { alert('Izberi nosilca plačila!'); return; }
