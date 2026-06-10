@@ -127,7 +127,7 @@
         <div class="order-list">
           <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
             <div class="order-main">
-              <span class="order-name">{{ group.ime }}</span>
+              <button @click="toggleOrderName(group.key)" :title="group.ime" :class="['order-name', { expanded: expandedOrderNames.includes(group.key) }]">{{ group.ime }}</button>
               <span class="order-meta">{{ group.quantity }} × {{ group.cena.toFixed(2) }} €</span>
             </div>
             <div class="order-controls">
@@ -661,6 +661,7 @@ const passInput = ref('')
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const customCharge = ref({ ime: '', cena: null })
 const showCustomCharge = ref(false)
+const expandedOrderNames = ref([])
 const newCategoryName = ref('')
 const defaultTariffs = [
   { id: 1, kombinacija: 'Član + Član', cena_na_uro: 0 },
@@ -720,6 +721,7 @@ const inventoryBuys = reactive(JSON.parse(localStorage.getItem('ciroznaInventory
 watch(inventoryBuys, (newVal) => localStorage.setItem('ciroznaInventoryBuys', JSON.stringify(newVal)), { deep: true })
 watch(activeUser, (user) => {
   showCustomCharge.value = false
+  expandedOrderNames.value = []
   if (!user) return
   tables.value.forEach((table) => {
     if (table.status === 'prosta' && !table.lockedPayer) table.payer = user
@@ -1359,6 +1361,11 @@ const adminUsers = computed(() => {
 const userCurrentOrders = computed(() => activeUser.value ? currentOrders.value.filter(o => o.userId === activeUser.value.id) : [])
 const userTotalTab = computed(() => userCurrentOrders.value.reduce((sum, o) => sum + o.cena, 0))
 const isDrinkOrderName = (name) => drinks.value.some(d => d.ime === name)
+const toggleOrderName = (key) => {
+  const index = expandedOrderNames.value.indexOf(key)
+  if (index === -1) expandedOrderNames.value.push(key)
+  else expandedOrderNames.value.splice(index, 1)
+}
 const groupedCurrentOrders = computed(() => {
   const groups = new Map()
   userCurrentOrders.value.forEach((order) => {
@@ -1847,7 +1854,9 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .order-list { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
 .order-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 3px; border-bottom: 1px solid var(--border-color); }
 .order-main { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
-.order-name { width: 100%; font-weight: bold; font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-name { width: 100%; border: none; background: transparent; color: var(--text-color); padding: 0; margin: 0; font: inherit; font-weight: bold; font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: pointer; }
+.order-name:hover,
+.order-name.expanded { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .order-meta { color: #888; font-size: 11px; line-height: 1.2; white-space: nowrap; }
 .order-controls { display: grid; grid-template-columns: 70px 28px 16px 28px 30px; align-items: center; justify-content: end; column-gap: 6px; row-gap: 4px; flex: 0 0 auto; }
 .order-total { font-weight: bold; font-size: 15px; white-space: nowrap; text-align: right; }
