@@ -2102,14 +2102,14 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .inventory-sort-panel { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; padding: 10px 12px; }
 .inventory-sort-panel span { color: #aaa; font-size: 12px; font-weight: 800; margin-right: 2px; }
 .inventory-sort-panel .btn-toggle { flex: 0 0 auto; width: auto; padding: 7px 10px; font-size: 12px; }
-.inventory-item { display: grid; grid-template-columns: minmax(90px, 0.7fr) minmax(180px, 0.8fr) auto minmax(305px, auto); gap: 7px; padding: 12px 0; border-bottom: 1px dashed var(--border-color); align-items: center; }
+.inventory-item { display: grid; grid-template-columns: minmax(90px, 0.55fr) minmax(245px, 0.85fr) minmax(170px, auto) minmax(305px, auto); gap: 10px; padding: 12px 0; border-bottom: 1px dashed var(--border-color); align-items: center; overflow-x: auto; }
 .inventory-title { display: flex; flex-direction: column; gap: 5px; text-align: left; min-width: 0; }
 .inventory-title strong { color: var(--text-color); font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inventory-title span { color: #9aa0a6; font-size: 12px; font-weight: bold; }
-.inventory-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.inventory-controls { display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 170px; }
 .mini-field { display: flex; align-items: center; gap: 5px; }
-.mini-field span { font-size: 11px; color: #888; font-weight: bold; }
-.mini-field input { width: 42px; text-align: center; }
+.mini-field span { flex: 0 0 34px; font-size: 11px; color: #888; font-weight: bold; text-align: right; }
+.mini-field input { width: 46px; text-align: center; }
 .stock-stepper { display: flex; align-items: center; gap: 5px; }
 .purchase-row { display: grid; grid-template-columns: minmax(40px, 50px) repeat(2, minmax(54px, 66px)) minmax(78px, 86px) auto; gap: 5px; align-items: end; justify-content: start; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 7px; min-width: 0; }
 .purchase-row label { display: flex; flex-direction: column; gap: 5px; text-align: left; color: #aaa; font-size: 10px; font-weight: bold; }
@@ -2117,8 +2117,8 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .purchase-save { height: 32px; white-space: nowrap; padding: 6px 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .purchase-undo { height: 32px; white-space: nowrap; padding: 6px 7px; font-size: 12px; }
 .purchase-undo:disabled { opacity: 0.38; cursor: not-allowed; filter: grayscale(0.6); }
-.market-line { display: flex; flex-wrap: nowrap; gap: 5px; min-width: 0; }
-.market-line span { background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 999px; color: #aaa; font-size: 10px; font-weight: bold; padding: 5px 7px; min-width: 58px; max-width: 76px; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.05; overflow: hidden; }
+.market-line { display: grid; grid-template-columns: repeat(3, minmax(72px, 1fr)); gap: 6px; min-width: 235px; }
+.market-line span { background: var(--input-bg); border: 1px solid var(--border-color); border-radius: 999px; color: #aaa; font-size: 10px; font-weight: bold; padding: 5px 7px; min-width: 0; max-width: none; display: flex; flex-direction: column; align-items: center; gap: 2px; line-height: 1.05; overflow: hidden; }
 .market-line small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #9aa0a6; }
 .market-line strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-color); font-size: 11px; }
 .btn-stock { background: var(--border-color); color: var(--text-color); border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
