@@ -30,11 +30,10 @@
           <div class="user-info">
 <strong>                        <span :class="['user-badge-static', user.tip === 'član' ? 'badge-clan' : 'badge-neclan']">{{ user.tip === 'član' ? 'Č' : 'N' }}</span>
             {{ user.ime }}</strong>
+            <span v-if="getUserDebt(user.id) !== 0" :class="['user-debt-line', getUserDebt(user.id) > 0 ? 'debt-warning' : 'credit-warning']">{{ getUserDebt(user.id).toFixed(2) }} €</span>
           </div>
 
           <div class="user-actions">
-
-            <span v-if="getUserDebt(user.id) !== 0" :class="getUserDebt(user.id) > 0 ? 'debt-warning' : 'credit-warning'">{{ getUserDebt(user.id).toFixed(2) }} €</span>
             <button @click.stop="editUser(user)" class="btn-icon">✎</button>
             <!-- <button @click.stop="deleteUser(user)" class="btn-icon btn-del-red">✖</button> -->
           </div>
@@ -475,6 +474,26 @@
                   </label>
                 </div>
                 <hr style="border-color:var(--border-color); margin:20px 0;">
+                <h3>Širina stolpcev</h3>
+                <div class="settings-grid">
+                  <label>
+                    <span>Levi stolpec (%)</span>
+                    <input v-model.number="ui.leftColPct" type="number" min="15" max="40" class="input-inline">
+                  </label>
+                  <label>
+                    <span>Srednji stolpec (%)</span>
+                    <input v-model.number="ui.middleColPct" type="number" min="25" max="55" class="input-inline">
+                  </label>
+                  <label>
+                    <span>Desni stolpec (%)</span>
+                    <input v-model.number="ui.rightColPct" type="number" min="20" max="45" class="input-inline">
+                  </label>
+                  <label>
+                    <span>Najmanjša širina ekrana</span>
+                    <input v-model="ui.minAppWidth" type="text" class="input-inline">
+                  </label>
+                </div>
+                <hr style="border-color:var(--border-color); margin:20px 0;">
                 <h3>Žrtve - seznam</h3>
                 <div class="settings-grid">
                   <label>
@@ -661,7 +680,7 @@
             </div>
 
           </div>
-          <button @click="closeAdmin" class="btn-close-admin">Zapri Admin Panel</button>
+          <button @click="closeAdmin" class="btn-close-admin" title="Zapri Admin Panel">X</button>
         </div>
       </div>
     </div>
@@ -807,6 +826,10 @@ const defaultUI = {
   btnHeight: '80px',
   fontSize: '15px',
   fontColor: '#ffffff',
+  leftColPct: 23,
+  middleColPct: 42,
+  rightColPct: 35,
+  minAppWidth: '980px',
   useCatColors: true,
   btnBgColor: '#3a3a48',
   victimFontSize: '14px',
@@ -833,7 +856,14 @@ if (ui.inventoryStockProfitLabel === 'Zalog prof.') ui.inventoryStockProfitLabel
 const saveUISettings = () => { localStorage.setItem('ciroznaUI', JSON.stringify(ui)); alert('Nastavitve shranjene!'); }
 
 const customCssVars = computed(() => {
+  const left = Number(ui.leftColPct) || 23
+  const middle = Number(ui.middleColPct) || 42
+  const right = Number(ui.rightColPct) || Math.max(20, 100 - left - middle)
   return {
+    '--left-col': `${left}fr`,
+    '--middle-col': `${middle}fr`,
+    '--right-col': `${right}fr`,
+    '--min-app-width': ui.minAppWidth || '980px',
     '--drink-w': ui.btnWidth,
     '--drink-h': ui.btnHeight,
     '--drink-fz': ui.fontSize,
@@ -1879,14 +1909,14 @@ const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) adminAuth.value
 </script>
 
 <style scoped>
-:global(html), :global(body) { overscroll-behavior-y: none; overscroll-behavior-x: none; touch-action: pan-x pan-y; margin: 0; padding: 0; overflow: hidden; }
+:global(html), :global(body) { overscroll-behavior-y: none; overscroll-behavior-x: auto; touch-action: pan-x pan-y; margin: 0; padding: 0; overflow: auto; }
 
 /* THEME VARIABLAS */
 .kiosk-container.dark { --bg-color: #121212; --panel-bg: #1e1e24; --text-color: #eaeaea; --border-color: #333333; --input-bg: #2a2a35; --item-bg: #25252d; }
 .kiosk-container.light { --bg-color: #e0e0e0; --panel-bg: #ffffff; --text-color: #222222; --border-color: #cccccc; --input-bg: #f5f5f5; --item-bg: #f9f9f9; }
 
 /* GLOBAL & LAYOUT */
-.kiosk-container { display: grid; grid-template-columns: minmax(210px, 0.85fr) minmax(320px, 1.25fr) minmax(340px, 1.3fr); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box;   height: 100dvh; overflow: hidden; }
+.kiosk-container { display: grid; grid-template-columns: minmax(190px, var(--left-col)) minmax(320px, var(--middle-col)) minmax(290px, var(--right-col)); min-width: var(--min-app-width); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box; height: 100dvh; overflow: hidden; }
 .db-error-banner { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 10px; max-width: min(920px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 8px; background: #3b1f1f; border: 1px solid #ff5252; color: #fff; box-shadow: 0 12px 28px rgba(0,0,0,0.35); font-size: 13px; }
 .db-error-banner span { color: #ffd6d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-error-banner button { border: none; border-radius: 6px; padding: 7px 10px; background: #ff5252; color: white; font-weight: 800; cursor: pointer; white-space: nowrap; }
@@ -1916,12 +1946,13 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .is-member { border-left: 6px solid #2980b9; }
 .is-guest { border-left: 6px solid #888; }
 .selected-user { background: #354a35 !important; border-color: #4caf50; color: white;}
-.user-info { text-align: left; flex-grow: 1; min-width: 0; }
+.user-info { text-align: left; flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .user-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: var(--victim-fz); font-weight: var(--victim-fw); }
 
 .user-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
 .debt-warning { color: #ff5252; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
 .credit-warning { color: #4caf50; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
+.user-debt-line { display: block; margin: 0; padding-left: 22px; line-height: 1.1; }
 .user-badge-static { font-size: 10px; color: white; padding: 1px 4px; border-radius: 3px; font-weight: bold; width: 12px; text-align: center;}
 .badge-clan { background: #2980b9; }
 .badge-neclan { background: #555; }
@@ -1979,7 +2010,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .order-name.expanded { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .order-meta { color: #888; font-size: 11px; line-height: 1.2; white-space: nowrap; }
 .order-controls { display: grid; grid-template-columns: 70px 28px 16px 28px 30px; align-items: center; justify-content: end; column-gap: 6px; row-gap: 4px; flex: 0 0 auto; }
-.order-total { font-weight: bold; font-size: 15px; white-space: nowrap; text-align: right; }
+.order-total { font-weight: 500; font-size: 13px; white-space: nowrap; text-align: right; }
 .order-qty { min-width: 0; text-align: center; font-size: 15px; font-weight: bold; }
 .btn-qty { width: 28px; height: 30px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 17px; font-weight: bold; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .btn-qty-minus { background: #c62828; }
@@ -1992,7 +2023,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* ADMIN MODAL WINDOW */
 .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-.modal-content { background: var(--panel-bg); border: 1px solid var(--border-color); padding: 35px; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,0.45); }
+.modal-content { position: relative; background: var(--panel-bg); border: 1px solid var(--border-color); padding: 35px; border-radius: 12px; box-shadow: 0 24px 70px rgba(0,0,0,0.45); }
 .admin-large { width: min(1180px, calc(100vw - 32px)); height: min(820px, calc(100vh - 48px)); display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
 .auth-small { width: 330px !important; padding: 20px !important; border-radius: 10px; }
 
@@ -2004,7 +2035,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* ADMIN INSIDE */
 .admin-dashboard { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.admin-tabs { display: flex; gap: 8px; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; flex-wrap: wrap;}
+.admin-tabs { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; }
 .tab-btn { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); color: #a7a7ad; border: 1px solid var(--border-color); font-size: 13px; cursor: pointer; font-weight: bold; padding: 8px 12px; border-radius: 999px; transition: all 0.18s ease; }
 .tab-btn:hover { color: var(--text-color); border-color: rgba(76,175,80,0.55); }
 .tab-btn.active { color: #ffffff; background: linear-gradient(135deg, #2e7d32, #43a047); border-color: #66bb6a; box-shadow: 0 8px 20px rgba(76,175,80,0.22); }
@@ -2035,7 +2066,8 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .add-drink-box { background: var(--item-bg); padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px dashed #888; }
 .add-drink-row { display: flex; gap: 10px; align-items: center; }
 .mb-0 { margin-bottom: 0 !important; }
-.btn-close-admin { width: 100%; padding: 12px; background: var(--border-color); color: var(--text-color); border: none; border-radius: 6px; margin-top: 20px; cursor: pointer; font-weight: bold; }
+.btn-close-admin { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; padding: 0; background: #c62828; color: #fff; border: none; border-radius: 8px; margin: 0; cursor: pointer; font-weight: 900; font-size: 16px; z-index: 2; }
+.btn-close-admin:hover { background: #e53935; }
 
 /* BAZA BUTTONS */
 .db-section { margin-bottom: 25px; }
@@ -2171,27 +2203,28 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 @media (max-width: 760px), (orientation: portrait) and (max-width: 900px) {
   :global(html), :global(body) {
-    height: auto;
-    overflow-x: hidden;
-    overflow-y: auto;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .kiosk-container {
-    display: flex;
-    flex-direction: column;
-    min-height: 100dvh;
-    height: auto;
-    overflow: visible;
+    display: grid;
+    grid-template-columns: minmax(160px, var(--left-col)) minmax(300px, var(--middle-col)) minmax(260px, var(--right-col));
+    min-width: max(var(--min-app-width), 860px);
+    height: 100dvh;
+    overflow: hidden;
     padding: 8px;
     gap: 10px;
   }
 
   .panel {
-    width: 100%;
-    padding: 12px;
+    min-width: 0;
+    padding: 10px;
     padding-bottom: 24px !important;
     border-radius: 8px;
-    overflow: visible;
+    overflow-y: auto;
+    overflow-x: hidden;
     box-sizing: border-box;
   }
 
@@ -2205,7 +2238,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
   }
 
   .user-item {
-    padding: 8px 9px;
+    padding: 7px 8px;
   }
 
   .drink-grid {
@@ -2248,12 +2281,12 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
   }
 
   .order-controls {
-    grid-template-columns: 48px 28px 14px 28px 24px;
+    grid-template-columns: 56px 26px 14px 26px 24px;
     gap: 3px;
   }
 
   .order-total {
-    font-size: 14px;
+    font-size: 12px;
     text-align: right;
   }
 
