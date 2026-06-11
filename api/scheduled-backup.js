@@ -85,9 +85,6 @@ const nowParts = (timeZone) => {
 
 const shouldRun = (schedule, parts) => {
   if (!schedule?.enabled || !schedule.email) return { run: false, reason: 'disabled' }
-  const [hour, minute] = String(schedule.time || '08:00').split(':').map(Number)
-  if (parts.hour !== hour) return { run: false, reason: 'wrong-hour' }
-  if (parts.minute > 20) return { run: false, reason: 'outside-window' }
 
   let periodKey = ''
   if (schedule.frequency === 'daily') periodKey = `daily:${parts.dateKey}`
