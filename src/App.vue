@@ -1,5 +1,5 @@
 <template>
-  <div class="kiosk-container" :class="ui.theme" :style="customCssVars" data-build="2026-06-11-layout-fix">
+  <div class="kiosk-container" :class="ui.theme" :style="customCssVars" data-build="2026-06-11-vercel-reconnect">
     <div v-if="dbError" class="db-error-banner">
       <strong>Baza trenutno ni dosegljiva.</strong>
       <span>{{ dbError }}</span>
