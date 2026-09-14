@@ -177,10 +177,16 @@
             <button @click="checkPass" class="btn-start btn-compact-action">Vstopi</button>
             <button @click="closeAdmin" class="btn-stop btn-compact-action">Prekliči</button>
           </div>
+          <div class="password-help">Pozabljena koda? Reset: <a href="mailto:deevyezh@gmail.com">deevyezh@gmail.com</a></div>
         </div>
 
         <!-- DASHBOARD CONTAINER -->
         <div v-else class="admin-dashboard">
+          <div class="admin-security-row">
+            <span>Admin način je aktiven</span>
+            <input v-model="newAdminPassword" type="password" class="input-inline admin-pass-input" placeholder="Nova koda" autocomplete="new-password" @keyup.enter="changeAdminPassword">
+            <button @click="changeAdminPassword" class="btn-start btn-small admin-pass-save">Shrani kodo</button>
+          </div>
           <div class="admin-tabs">
             <button v-for="tab in adminTabs" :key="tab.id" @click="adminTab = tab.id" :class="['tab-btn', { active: adminTab === tab.id }]">
               {{ adminTabLabels[tab.id] || tab.fallback }}
@@ -710,7 +716,7 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { supabase } from './supabaseClient'
 
-const ADMIN_PASSWORD = '8'
+const DEFAULT_ADMIN_PASSWORD = '8'
 
 const users = ref([])
 const drinks = ref([])
@@ -744,6 +750,8 @@ const defaultAdminTabLabels = adminTabs.reduce((acc, tab) => ({ ...acc, [tab.id]
 const adminTabLabels = reactive({ ...defaultAdminTabLabels, ...(JSON.parse(localStorage.getItem('ciroznaAdminTabs')) || {}) })
 const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.stringify(adminTabLabels))
 const passInput = ref('')
+const newAdminPassword = ref('')
+const adminPassword = ref(localStorage.getItem('ciroznaAdminPassword') || DEFAULT_ADMIN_PASSWORD)
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const customCharge = ref({ ime: '', cena: null })
 const showCustomCharge = ref(false)
@@ -1920,9 +1928,17 @@ const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
 
-const closeAdmin = () => { showAdmin.value = false; passInput.value = ''; }
-const lockAdmin = () => { adminAuth.value = false; showCustomCharge.value = false; passInput.value = ''; }
-const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) { adminAuth.value = true; passInput.value = '' } else alert('Napačna koda!'); }
+const closeAdmin = () => { showAdmin.value = false; passInput.value = ''; newAdminPassword.value = ''; }
+const lockAdmin = () => { adminAuth.value = false; showAdmin.value = false; showCustomCharge.value = false; passInput.value = ''; newAdminPassword.value = ''; }
+const checkPass = () => { if(passInput.value === adminPassword.value) { adminAuth.value = true; showAdmin.value = false; passInput.value = '' } else alert('Napačna koda!'); }
+const changeAdminPassword = () => {
+  const nextPassword = newAdminPassword.value.trim()
+  if (!nextPassword) return alert('Vpiši novo admin kodo.')
+  adminPassword.value = nextPassword
+  localStorage.setItem('ciroznaAdminPassword', nextPassword)
+  newAdminPassword.value = ''
+  alert('Admin koda je shranjena na tej napravi.')
+}
 </script>
 
 <style scoped>
@@ -2063,10 +2079,15 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .auth-box-compact h3 { text-align: center; margin-bottom: 12px; font-size: 16px; color: var(--text-color); margin-top: 0;}
 .input-compact { padding: 8px 10px !important; font-size: 15px !important; margin-bottom: 12px !important; letter-spacing: 4px; }
 .auth-buttons-compact { display: flex; gap: 8px; }
+.password-help { margin-top: 10px; color: #888; font-size: 12px; text-align: center; }
+.password-help a { color: #58a6ff; font-weight: 800; text-decoration: none; }
 .btn-compact-action { padding: 8px !important; font-size: 13px !important; border-radius: 4px !important; flex: 1; font-weight: bold; cursor: pointer; border: none; color: white;}
 
 /* ADMIN INSIDE */
 .admin-dashboard { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.admin-security-row { display: grid; grid-template-columns: minmax(110px, auto) minmax(120px, 180px) auto; gap: 8px; align-items: center; margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(76,175,80,0.45); border-radius: 8px; background: rgba(76,175,80,0.1); color: #7ee787; font-size: 12px; font-weight: 900; }
+.admin-pass-input { width: 100%; box-sizing: border-box; }
+.admin-pass-save { width: auto; white-space: nowrap; }
 .admin-tabs { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; }
 .tab-btn { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); color: #a7a7ad; border: 1px solid var(--border-color); font-size: 13px; cursor: pointer; font-weight: bold; padding: 8px 12px; border-radius: 999px; transition: all 0.18s ease; }
 .tab-btn:hover { color: var(--text-color); border-color: rgba(76,175,80,0.55); }
