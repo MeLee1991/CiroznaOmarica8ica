@@ -75,6 +75,43 @@
           {{ isSpecialTariff ? 'Globalni % Popust/Podražitev (Aktiven)' : 'Standardni cenik (Člani / Nečlani)' }}
         </button>
       </div>
+
+      <div v-if="activeUser" class="tab-section tab-section-top">
+        <div class="tab-title-row">
+          <h3>Zapitek: {{ activeUser.ime }}</h3>
+          <button v-if="canManageTab" @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
+            {{ showCustomCharge ? '−' : '+' }}
+          </button>
+        </div>
+        <div v-if="canManageTab && showCustomCharge" class="custom-charge-row">
+          <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
+          <input v-model.number="customCharge.cena" type="number" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
+          <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
+        </div>
+        <div class="order-list">
+          <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
+            <div class="order-main">
+              <button @click="toggleOrderName(group.key)" :title="group.ime" :class="['order-name', { expanded: expandedOrderNames.includes(group.key) }]">{{ group.ime }}</button>
+              <span class="order-meta">{{ group.quantity }} × {{ group.cena.toFixed(2) }} €</span>
+            </div>
+            <div class="order-controls">
+              <span class="order-total">{{ group.total.toFixed(2) }} €</span>
+              <template v-if="group.isDrink">
+                <button @click="addOrderGroupItem(group)" class="btn-qty btn-qty-plus" title="Dodaj še eno in odštej iz zaloge">+</button>
+                <span class="order-qty">{{ group.quantity }}</span>
+                <button v-if="canManageTab" @click="removeOrderGroupItem(group)" class="btn-qty btn-qty-minus" title="Odštej eno in vrni v zalogo">−</button>
+              </template>
+              <button v-if="canManageTab" @click="removeOrderGroup(group)" class="btn-del-mini" title="Odstrani vrstico in vrni zalogo">✖</button>
+            </div>
+          </div>
+        </div>
+        
+        <div v-if="canManageTab && userCurrentOrders.length > 0" class="tab-actions">
+          <button @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
+          <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
+        </div>
+      </div>
+      <div v-else class="empty-state empty-state-compact">Izberi žrtev za prikaz računa.</div>
       
       <div v-for="t in tables" :key="t.id" class="table-card">
         <div class="table-header">
@@ -110,43 +147,6 @@
           </div>
         </div>
       </div>
-
-      <div v-if="activeUser" class="tab-section">
-        <div class="tab-title-row">
-          <h3>Zapitek: {{ activeUser.ime }}</h3>
-          <button @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
-            {{ showCustomCharge ? '−' : '+' }}
-          </button>
-        </div>
-        <div v-if="showCustomCharge" class="custom-charge-row">
-          <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
-          <input v-model.number="customCharge.cena" type="number" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
-          <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
-        </div>
-        <div class="order-list">
-          <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
-            <div class="order-main">
-              <button @click="toggleOrderName(group.key)" :title="group.ime" :class="['order-name', { expanded: expandedOrderNames.includes(group.key) }]">{{ group.ime }}</button>
-              <span class="order-meta">{{ group.quantity }} × {{ group.cena.toFixed(2) }} €</span>
-            </div>
-            <div class="order-controls">
-              <span class="order-total">{{ group.total.toFixed(2) }} €</span>
-              <template v-if="group.isDrink">
-                <button @click="addOrderGroupItem(group)" class="btn-qty btn-qty-plus" title="Dodaj še eno in odštej iz zaloge">+</button>
-                <span class="order-qty">{{ group.quantity }}</span>
-                <button @click="removeOrderGroupItem(group)" class="btn-qty btn-qty-minus" title="Odštej eno in vrni v zalogo">−</button>
-              </template>
-              <button @click="removeOrderGroup(group)" class="btn-del-mini" title="Odstrani vrstico in vrni zalogo">✖</button>
-            </div>
-          </div>
-        </div>
-        
-        <div v-if="userCurrentOrders.length > 0" class="tab-actions">
-          <button @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
-          <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
-        </div>
-      </div>
-      <div v-else class="empty-state">Izberi žrtev za prikaz računa.</div>
     </div>
 
     <!-- ADMIN MODAL WINDOW -->
@@ -1499,6 +1499,7 @@ const sortedUsers = computed(() => {
 })
 
 const getUserDebt = (id) => currentOrders.value.filter(o => o.userId === id).reduce((sum, o) => sum + o.cena, 0)
+const canManageTab = computed(() => adminAuth.value)
 const adminUsers = computed(() => {
   const direction = playerSort.value.dir === 'asc' ? 1 : -1
   return [...users.value].sort((a, b) => {
@@ -1904,8 +1905,8 @@ const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
 
-const closeAdmin = () => { showAdmin.value = false; adminAuth.value = false; passInput.value = ''; }
-const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) adminAuth.value = true; else alert('Napačna koda!'); }
+const closeAdmin = () => { showAdmin.value = false; passInput.value = ''; }
+const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) { adminAuth.value = true; passInput.value = '' } else alert('Napačna koda!'); }
 </script>
 
 <style scoped>
@@ -1995,6 +1996,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* TAB (ZAPITEK) */
 .tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
+.tab-section-top { margin-top: 0; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid var(--border-color); }
 .tab-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
 .tab-title-row h3 { margin: 0; }
 .custom-charge-toggle { background: #2e7d32; }
