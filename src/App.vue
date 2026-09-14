@@ -78,10 +78,11 @@
 
       <div v-if="activeUser" class="tab-section tab-section-top">
         <div class="tab-title-row">
-          <h3>Zapitek: {{ activeUser.ime }}</h3>
+          <h3><span class="tab-label">Zapitek:</span> <span class="tab-user-name">{{ activeUser.ime }}</span></h3>
           <button v-if="canManageTab" @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
             {{ showCustomCharge ? '−' : '+' }}
           </button>
+          <button v-if="canManageTab" @click="lockAdmin" class="btn-admin-lock" title="Zakleni admin in vrni navadni način">Zakleni</button>
         </div>
         <div v-if="canManageTab && showCustomCharge" class="custom-charge-row">
           <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
@@ -1906,6 +1907,7 @@ const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ 
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
 
 const closeAdmin = () => { showAdmin.value = false; passInput.value = ''; }
+const lockAdmin = () => { adminAuth.value = false; showCustomCharge.value = false; passInput.value = ''; }
 const checkPass = () => { if(passInput.value === ADMIN_PASSWORD) { adminAuth.value = true; passInput.value = '' } else alert('Napačna koda!'); }
 </script>
 
@@ -1997,8 +1999,12 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 /* TAB (ZAPITEK) */
 .tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
 .tab-section-top { margin-top: 0; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid var(--border-color); }
-.tab-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
-.tab-title-row h3 { margin: 0; }
+.tab-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.tab-title-row h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.tab-label { color: var(--text-color); font-weight: 800; }
+.tab-user-name { display: inline-flex; align-items: center; max-width: 170px; padding: 4px 10px; border-radius: 999px; background: rgba(76,175,80,0.18); border: 1px solid rgba(76,175,80,0.55); color: #7ee787; font-weight: 900; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-admin-lock { height: 30px; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 0 10px; background: #455a64; color: white; cursor: pointer; font-size: 12px; font-weight: 800; }
+.btn-admin-lock:hover { background: #c62828; }
 .custom-charge-toggle { background: #2e7d32; }
 .custom-charge-toggle.active { background: #c62828; }
 .custom-charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 86px; gap: 6px; align-items: center; margin-bottom: 12px; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
