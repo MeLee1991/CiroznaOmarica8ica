@@ -39,7 +39,14 @@
           </div>
         </div>
       </div>
-      <button class="btn-admin-main" @click="showAdmin = true">⚙️ Admin Panel</button>
+      <div :class="['admin-mode-switch', { unlocked: adminAuth }]">
+        <button class="btn-admin-main" @click="showAdmin = true">
+          {{ adminAuth ? 'Admin način' : 'Admin Panel' }}
+        </button>
+        <button v-if="adminAuth" @click="lockAdmin" class="btn-user-mode-main" title="Zakleni admin in vrni navadni način">
+          Navadni način
+        </button>
+      </div>
     </div>
 
     <!-- 2. MIDDLE COLUMN: CIROZNA OMARICA -->
@@ -1940,7 +1947,11 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .btn-toggle { flex: 1; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; border-radius: 6px; font-weight: bold; }
 .btn-toggle.active { background: #4caf50; border-color: #4caf50; color: white;}
 .btn-add-main { width: 100%; padding: 12px; background: #2e7d32; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; }
-.btn-admin-main { width: 100%; padding: 15px; background: #455a64; border: none; color: white; margin-top: 20px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.admin-mode-switch { margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+.admin-mode-switch.unlocked { padding: 8px; border: 1px solid rgba(76,175,80,0.55); border-radius: 8px; background: rgba(76,175,80,0.12); }
+.btn-admin-main { width: 100%; padding: 15px; background: #455a64; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
+.admin-mode-switch.unlocked .btn-admin-main { background: #2e7d32; }
+.btn-user-mode-main { width: 100%; padding: 12px; background: #c62828; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 900; }
 .btn-tariff-mode { padding: 12px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.3s; width: 100%;}
 .active-discount { background: #d32f2f; border-color: #ff5252; color: white;}
 
