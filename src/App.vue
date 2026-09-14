@@ -40,11 +40,18 @@
         </div>
       </div>
       <div :class="['admin-mode-switch', { unlocked: adminAuth }]">
-        <button class="btn-admin-main" @click="showAdmin = true">
-          {{ adminAuth ? 'Admin način' : 'Admin Panel' }}
+        <div class="mode-status">
+          <span class="mode-dot"></span>
+          {{ adminAuth ? 'Admin način aktiven' : 'Navadni način' }}
+        </div>
+        <button v-if="!adminAuth" class="btn-mode-main btn-to-admin" @click="showAdmin = true" title="Preklopi v admin način">
+          To admin
         </button>
-        <button v-if="adminAuth" @click="lockAdmin" class="btn-user-mode-main" title="Zakleni admin in vrni navadni način">
-          Navadni način
+        <button v-else class="btn-mode-main btn-to-user" @click="lockAdmin" title="Zakleni admin in vrni navadni način">
+          To user
+        </button>
+        <button v-if="adminAuth" class="btn-admin-main" @click="showAdmin = true">
+          Admin Panel
         </button>
       </div>
     </div>
@@ -1947,11 +1954,17 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .btn-toggle { flex: 1; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; border-radius: 6px; font-weight: bold; }
 .btn-toggle.active { background: #4caf50; border-color: #4caf50; color: white;}
 .btn-add-main { width: 100%; padding: 12px; background: #2e7d32; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; }
-.admin-mode-switch { margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-.admin-mode-switch.unlocked { padding: 8px; border: 1px solid rgba(76,175,80,0.55); border-radius: 8px; background: rgba(76,175,80,0.12); }
-.btn-admin-main { width: 100%; padding: 15px; background: #455a64; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; }
-.admin-mode-switch.unlocked .btn-admin-main { background: #2e7d32; }
-.btn-user-mode-main { width: 100%; padding: 12px; background: #c62828; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 900; }
+.admin-mode-switch { margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 8px; padding: 8px; border: 1px solid rgba(120,120,130,0.38); border-radius: 8px; background: rgba(255,255,255,0.035); }
+.admin-mode-switch.unlocked { border-color: rgba(76,175,80,0.65); background: rgba(76,175,80,0.13); }
+.mode-status { display: flex; align-items: center; justify-content: center; gap: 7px; color: #aaa; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0; }
+.mode-dot { width: 9px; height: 9px; border-radius: 999px; background: #8a8a8a; box-shadow: 0 0 0 3px rgba(138,138,138,0.14); }
+.admin-mode-switch.unlocked .mode-status { color: #7ee787; }
+.admin-mode-switch.unlocked .mode-dot { background: #4caf50; box-shadow: 0 0 0 3px rgba(76,175,80,0.18); }
+.btn-mode-main, .btn-admin-main { width: 100%; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 900; }
+.btn-mode-main { padding: 13px; font-size: 15px; }
+.btn-to-admin { background: #1976d2; }
+.btn-to-user { background: #c62828; }
+.btn-admin-main { padding: 11px; background: #455a64; font-size: 13px; }
 .btn-tariff-mode { padding: 12px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.3s; width: 100%;}
 .active-discount { background: #d32f2f; border-color: #ff5252; color: white;}
 
