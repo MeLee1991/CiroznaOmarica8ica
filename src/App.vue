@@ -177,14 +177,21 @@
             <button @click="checkPass" class="btn-start btn-compact-action">Vstopi</button>
             <button @click="closeAdmin" class="btn-stop btn-compact-action">Prekliči</button>
           </div>
-          <div class="password-help">Pozabljena koda? Reset: <a href="mailto:deevyezh@gmail.com">deevyezh@gmail.com</a></div>
+          <button type="button" class="password-reset-toggle" @click="showPasswordReset = !showPasswordReset">
+            Pozabljena koda?
+          </button>
+          <div v-if="showPasswordReset" class="password-reset-box">
+            <input v-model="resetEmail" type="email" class="input-inline" placeholder="Lastniški email">
+            <button @click="resetAdminPassword" class="btn-warn btn-compact-action">Reset na 8</button>
+            <small>Samo deevyezh@gmail.com lahko resetira kodo na tej napravi.</small>
+          </div>
         </div>
 
         <!-- DASHBOARD CONTAINER -->
         <div v-else class="admin-dashboard">
           <div class="admin-security-row">
-            <span>Admin način je aktiven</span>
             <input v-model="newAdminPassword" type="password" class="input-inline admin-pass-input" placeholder="Nova koda" autocomplete="new-password" @keyup.enter="changeAdminPassword">
+            <input v-model="newAdminPasswordRepeat" type="password" class="input-inline admin-pass-input" placeholder="Ponovi kodo" autocomplete="new-password" @keyup.enter="changeAdminPassword">
             <button @click="changeAdminPassword" class="btn-start btn-small admin-pass-save">Shrani kodo</button>
           </div>
           <div class="admin-tabs">
@@ -751,6 +758,9 @@ const adminTabLabels = reactive({ ...defaultAdminTabLabels, ...(JSON.parse(local
 const saveAdminTabLabels = () => localStorage.setItem('ciroznaAdminTabs', JSON.stringify(adminTabLabels))
 const passInput = ref('')
 const newAdminPassword = ref('')
+const newAdminPasswordRepeat = ref('')
+const resetEmail = ref('')
+const showPasswordReset = ref(false)
 const adminPassword = ref(localStorage.getItem('ciroznaAdminPassword') || DEFAULT_ADMIN_PASSWORD)
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const customCharge = ref({ ime: '', cena: null })
@@ -1928,16 +1938,27 @@ const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
 
-const closeAdmin = () => { showAdmin.value = false; passInput.value = ''; newAdminPassword.value = ''; }
-const lockAdmin = () => { adminAuth.value = false; showAdmin.value = false; showCustomCharge.value = false; passInput.value = ''; newAdminPassword.value = ''; }
-const checkPass = () => { if(passInput.value === adminPassword.value) { adminAuth.value = true; showAdmin.value = false; passInput.value = '' } else alert('Napačna koda!'); }
+const clearAdminInputs = () => { passInput.value = ''; newAdminPassword.value = ''; newAdminPasswordRepeat.value = ''; resetEmail.value = ''; showPasswordReset.value = false }
+const closeAdmin = () => { showAdmin.value = false; clearAdminInputs() }
+const lockAdmin = () => { adminAuth.value = false; showAdmin.value = false; showCustomCharge.value = false; clearAdminInputs() }
+const checkPass = () => { if(passInput.value === adminPassword.value) { adminAuth.value = true; showAdmin.value = false; clearAdminInputs() } else alert('Napačna koda!'); }
 const changeAdminPassword = () => {
   const nextPassword = newAdminPassword.value.trim()
+  const repeatPassword = newAdminPasswordRepeat.value.trim()
   if (!nextPassword) return alert('Vpiši novo admin kodo.')
+  if (nextPassword !== repeatPassword) return alert('Kodi se ne ujemata.')
   adminPassword.value = nextPassword
   localStorage.setItem('ciroznaAdminPassword', nextPassword)
   newAdminPassword.value = ''
+  newAdminPasswordRepeat.value = ''
   alert('Admin koda je shranjena na tej napravi.')
+}
+const resetAdminPassword = () => {
+  if (resetEmail.value.trim().toLowerCase() !== 'deevyezh@gmail.com') return alert('Reset lahko potrdi samo lastniški email.')
+  adminPassword.value = DEFAULT_ADMIN_PASSWORD
+  localStorage.removeItem('ciroznaAdminPassword')
+  clearAdminInputs()
+  alert('Admin koda je resetirana na 8.')
 }
 </script>
 
@@ -2079,13 +2100,14 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .auth-box-compact h3 { text-align: center; margin-bottom: 12px; font-size: 16px; color: var(--text-color); margin-top: 0;}
 .input-compact { padding: 8px 10px !important; font-size: 15px !important; margin-bottom: 12px !important; letter-spacing: 4px; }
 .auth-buttons-compact { display: flex; gap: 8px; }
-.password-help { margin-top: 10px; color: #888; font-size: 12px; text-align: center; }
-.password-help a { color: #58a6ff; font-weight: 800; text-decoration: none; }
+.password-reset-toggle { margin: 10px auto 0; display: block; border: none; background: transparent; color: #58a6ff; font-size: 12px; font-weight: 800; cursor: pointer; }
+.password-reset-box { margin-top: 10px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.14); }
+.password-reset-box small { grid-column: 1 / -1; color: #888; font-size: 11px; text-align: center; }
 .btn-compact-action { padding: 8px !important; font-size: 13px !important; border-radius: 4px !important; flex: 1; font-weight: bold; cursor: pointer; border: none; color: white;}
 
 /* ADMIN INSIDE */
 .admin-dashboard { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.admin-security-row { display: grid; grid-template-columns: minmax(110px, auto) minmax(120px, 180px) auto; gap: 8px; align-items: center; margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(76,175,80,0.45); border-radius: 8px; background: rgba(76,175,80,0.1); color: #7ee787; font-size: 12px; font-weight: 900; }
+.admin-security-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(76,175,80,0.45); border-radius: 8px; background: rgba(76,175,80,0.1); }
 .admin-pass-input { width: 100%; box-sizing: border-box; }
 .admin-pass-save { width: auto; white-space: nowrap; }
 .admin-tabs { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; }
