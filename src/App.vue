@@ -121,8 +121,8 @@
           </div>
         </div>
         
-        <div v-if="canManageTab && userCurrentOrders.length > 0" class="tab-actions">
-          <button @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
+        <div v-if="userCurrentOrders.length > 0" class="tab-actions">
+          <button v-if="canManageTab" @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
           <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
         </div>
       </div>
