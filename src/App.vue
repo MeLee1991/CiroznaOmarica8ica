@@ -358,22 +358,55 @@
               <div class="stats-grid">
                 <div class="stat-card"><h4>Danes</h4><span class="stat-date">{{ getDateLabel('danes') }}</span><div class="stat-value">{{ stats.daily.toFixed(2) }} €</div></div>
                 <div class="stat-card"><h4>Ta teden</h4><span class="stat-date">{{ getDateLabel('teden') }}</span><div class="stat-value">{{ stats.weekly.toFixed(2) }} €</div></div>
-                <div class="stat-card"><h4>Izbrani mesec</h4><span class="stat-date">{{ selectedMonthLabel }}</span><div class="stat-value">{{ stats.selectedMonthly.toFixed(2) }} €</div></div>
-                <div class="stat-card"><h4>Letos</h4><span class="stat-date">{{ getDateLabel('leto') }}</span><div class="stat-value">{{ stats.yearly.toFixed(2) }} €</div></div>
+                <div class="stat-card"><h4>Izbrani filter</h4><span class="stat-date">{{ currentFilterLabel }}</span><div class="stat-value">{{ filteredStatsTotal.toFixed(2) }} €</div></div>
+                <div class="stat-card"><h4>Leto {{ selectedYear }}</h4><span class="stat-date">1.1.{{ selectedYear }} - 31.12.{{ selectedYear }}</span><div class="stat-value">{{ stats.selectedYearly.toFixed(2) }} €</div></div>
               </div>
               
               <div class="admin-cat-block mt-15">
                 <h3 style="text-align: center; margin-bottom: 15px;">Časovni filter za analizo podatkov</h3>
-                <div class="btn-group-row" style="justify-content: center; margin-bottom: 15px;">
+                <div class="btn-group-row" style="justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">
                   <button @click="setFilter('vse')" :class="['btn-toggle', { active: activeFilter === 'vse' }]">Celotna Zgodovina</button>
                   <button @click="setFilter('danes')" :class="['btn-toggle', { active: activeFilter === 'danes' }]">Danes</button>
                   <button @click="setFilter('teden')" :class="['btn-toggle', { active: activeFilter === 'teden' }]">Ta Teden</button>
                   <button @click="setFilter('mesec')" :class="['btn-toggle', { active: activeFilter === 'mesec' }]">Ta Mesec</button>
+                  <button @click="setFilter('leto')" :class="['btn-toggle', { active: activeFilter === 'leto' }]">Celotno Leto {{ selectedYear }}</button>
                 </div>
-                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 10px;">
-                  <button @click="selectedYear--" class="btn-small btn-warn">◀</button>
+
+                <div class="history-filter-grid">
+                  <div class="history-filter-box">
+                    <span class="history-filter-title">Zadnjih X mesecev nazaj</span>
+                    <div class="history-months-row">
+                      <button v-for="mCount in [1, 3, 6, 12, 24]" :key="mCount"
+                              @click="setMonthsBackFilter(mCount)"
+                              :class="['btn-toggle', 'btn-small', { active: activeFilter === 'months_back' && Number(monthsBackCount) === mCount }]">
+                        {{ mCount }}m
+                      </button>
+                      <input v-model.number="monthsBackCount" type="number" min="1" max="120" class="input-inline history-months-input" @input="setFilter('months_back')" placeholder="Št. mesecev">
+                      <button @click="setFilter('months_back')" :class="['btn-toggle', 'btn-small', { active: activeFilter === 'months_back' }]">Uporabi</button>
+                    </div>
+                  </div>
+
+                  <div class="history-filter-box">
+                    <span class="history-filter-title">Obdobje po datumu (od - do)</span>
+                    <div class="history-date-row">
+                      <label>
+                        <span>Od:</span>
+                        <input v-model="customDateFrom" type="date" class="input-inline" @change="setFilter('custom_range')">
+                      </label>
+                      <label>
+                        <span>Do:</span>
+                        <input v-model="customDateTo" type="date" class="input-inline" @change="setFilter('custom_range')">
+                      </label>
+                      <button @click="setFilter('custom_range')" :class="['btn-toggle', 'btn-small', { active: activeFilter === 'custom_range' }]">Filtriraj</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px; margin: 14px 0 10px;">
+                  <button @click="stepSelectedYear(-1)" class="btn-small btn-warn">◀</button>
                   <strong style="font-size: 16px;">Leto {{ selectedYear }}</strong>
-                  <button @click="selectedYear++" class="btn-small btn-warn">▶</button>
+                  <button @click="stepSelectedYear(1)" class="btn-small btn-warn">▶</button>
+                  <button @click="setFilter('leto')" :class="['btn-toggle', 'btn-small', { active: activeFilter === 'leto' }]" style="margin-left: 6px;">Vsi meseci {{ selectedYear }}</button>
                 </div>
                 <div class="btn-group-row" style="flex-wrap: wrap; justify-content: center; gap: 5px;">
                   <button v-for="(m, i) in monthsList" :key="i"
@@ -449,6 +482,47 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <div class="admin-cat-block mt-15">
+                <div class="history-log-header">
+                  <h3>Zgodovina transakcij ({{ currentFilterLabel }}) — {{ filteredHistoryOrders.length }} vnosov ({{ filteredHistoryTotal.toFixed(2) }} €)</h3>
+                  <div class="history-log-controls">
+                    <input v-model="historySearch" type="text" class="input-inline" placeholder="🔍 Išči igralca ali artikel...">
+                    <select v-model="historyStatusFilter" class="input-inline">
+                      <option value="all">Vse (Plačano + Odprto)</option>
+                      <option value="paid">Samo plačano</option>
+                      <option value="unpaid">Samo odprt dolg</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="max-height: 420px; overflow-y: auto; margin-top: 10px;">
+                  <table class="stat-table">
+                    <thead>
+                      <tr>
+                        <th style="text-align: left;">Datum in ura</th>
+                        <th style="text-align: left;">Igralec</th>
+                        <th style="text-align: left;">Artikel / Storitev</th>
+                        <th style="text-align: center;">Status</th>
+                        <th style="text-align: right;">Znesek (€)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="order in filteredHistoryOrders" :key="order.id">
+                        <td style="text-align: left; white-space: nowrap; font-size: 12px; color: #aaa;">{{ formatOrderDateTime(order.created_at) }}</td>
+                        <td style="text-align: left; font-weight: bold;">{{ getUserNameById(order.userId) }}</td>
+                        <td style="text-align: left;">{{ order.ime }}</td>
+                        <td style="text-align: center;">
+                          <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Odprto' }}</span>
+                        </td>
+                        <td style="text-align: right; font-weight: bold;">{{ order.cena.toFixed(2) }} €</td>
+                      </tr>
+                      <tr v-if="filteredHistoryOrders.length === 0">
+                        <td colspan="5" style="text-align: center; color: #888; padding: 16px;">Ni najdenih transakcij za izbrano obdobje.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
             </div>
@@ -781,6 +855,11 @@ const flatRateValue = ref(5.0)
 const activeFilter = ref('vse') 
 const selectedMonth = ref(new Date().getMonth())
 const selectedYear = ref(new Date().getFullYear())
+const monthsBackCount = ref(6)
+const customDateFrom = ref('')
+const customDateTo = ref('')
+const historySearch = ref('')
+const historyStatusFilter = ref('all')
 const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec']
 const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
 const inventorySort = ref({ key: 'ime', dir: 'asc' })
@@ -808,6 +887,11 @@ const backupSchedule = reactive({ ...defaultBackupSchedule, ...(JSON.parse(local
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
+const setMonthsBackFilter = (mCount) => { monthsBackCount.value = mCount; activeFilter.value = 'months_back'; }
+const stepSelectedYear = (delta) => {
+  selectedYear.value += delta
+  if (activeFilter.value !== 'custom_month') activeFilter.value = 'leto'
+}
 const setMarketSort = (key) => {
   marketSort.value = {
     key,
@@ -1688,6 +1772,19 @@ const periodButtons = computed(() => {
 
 const currentFilterLabel = computed(() => {
   if (activeFilter.value === 'vse') return 'Celotna zgodovina';
+  if (activeFilter.value === 'danes') return 'Danes';
+  if (activeFilter.value === 'teden') return 'Ta teden';
+  if (activeFilter.value === 'mesec') return 'Ta mesec';
+  if (activeFilter.value === 'leto') return `Leto ${selectedYear.value}`;
+  if (activeFilter.value === 'months_back') {
+    const m = Math.max(1, Number(monthsBackCount.value) || 1);
+    return `Zadnjih ${m} ${m === 1 ? 'mesec' : (m === 2 ? 'meseca' : (m <= 4 ? 'mesece' : 'mesecev'))}`;
+  }
+  if (activeFilter.value === 'custom_range') {
+    const fromLabel = customDateFrom.value ? formatShortDate(new Date(`${customDateFrom.value}T00:00:00`)) : 'začetek';
+    const toLabel = customDateTo.value ? formatShortDate(new Date(`${customDateTo.value}T00:00:00`)) : 'zdaj';
+    return `Od ${fromLabel} do ${toLabel}`;
+  }
   if (activeFilter.value === 'custom_month') return `${monthsList[selectedMonth.value]} ${selectedYear.value}`;
   const btn = periodButtons.value.find(p => p.id === activeFilter.value);
   return btn ? btn.label : '';
@@ -1704,10 +1801,12 @@ const stats = computed(() => {
   const startOfWeek = getMonday(now);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 4, 30, 0)
   const startOfYear = new Date(now.getFullYear(), 0, 1)
+  const startOfSelectedYear = new Date(selectedYear.value, 0, 1, 0, 0, 0)
+  const endOfSelectedYear = new Date(selectedYear.value + 1, 0, 1, 0, 0, 0)
   const startOfSelectedMonth = new Date(selectedYear.value, selectedMonth.value, 1, 4, 30, 0)
   const endOfSelectedMonth = new Date(selectedYear.value, selectedMonth.value + 1, 1, 4, 30, 0)
 
-  let d = 0, w = 0, m = 0, selectedMonthly = 0, y = 0;
+  let d = 0, w = 0, m = 0, selectedMonthly = 0, y = 0, selectedYearly = 0;
   allOrders.value.filter(o => o.placano).forEach(o => {
     const time = new Date(o.created_at).getTime()
     if (time >= startOfShift.getTime()) d += o.cena
@@ -1715,8 +1814,9 @@ const stats = computed(() => {
     if (time >= startOfMonth.getTime()) m += o.cena
     if (time >= startOfSelectedMonth.getTime() && time < endOfSelectedMonth.getTime()) selectedMonthly += o.cena
     if (time >= startOfYear.getTime()) y += o.cena
+    if (time >= startOfSelectedYear.getTime() && time < endOfSelectedYear.getTime()) selectedYearly += o.cena
   })
-  return { daily: d, weekly: w, monthly: m, selectedMonthly, yearly: y }
+  return { daily: d, weekly: w, monthly: m, selectedMonthly, yearly: y, selectedYearly }
 })
 
 const orderMatchesActiveFilter = (order, now = new Date()) => {
@@ -1728,6 +1828,23 @@ const orderMatchesActiveFilter = (order, now = new Date()) => {
   }
   if (activeFilter.value === 'teden') return time >= getMonday(now);
   if (activeFilter.value === 'mesec') return time >= new Date(now.getFullYear(), now.getMonth(), 1, 4, 30, 0);
+  if (activeFilter.value === 'leto') {
+    const start = new Date(selectedYear.value, 0, 1, 0, 0, 0);
+    const end = new Date(selectedYear.value + 1, 0, 1, 0, 0, 0);
+    return time >= start && time < end;
+  }
+  if (activeFilter.value === 'months_back') {
+    const m = Math.max(1, Number(monthsBackCount.value) || 1);
+    const start = new Date(now);
+    start.setMonth(start.getMonth() - m);
+    start.setHours(0, 0, 0, 0);
+    return time >= start && time <= now;
+  }
+  if (activeFilter.value === 'custom_range') {
+    const start = customDateFrom.value ? new Date(`${customDateFrom.value}T00:00:00`) : new Date(0);
+    const end = customDateTo.value ? new Date(`${customDateTo.value}T23:59:59.999`) : new Date(8640000000000000);
+    return time >= start && time <= end;
+  }
   if (activeFilter.value === 'custom_month') {
     const start = new Date(selectedYear.value, selectedMonth.value, 1, 4, 30, 0);
     const end = new Date(selectedYear.value, selectedMonth.value + 1, 1, 4, 30, 0);
@@ -1743,6 +1860,38 @@ const filteredOrdersForStats = computed(() => {
     return orderMatchesActiveFilter(o, now)
   });
 });
+
+const filteredStatsTotal = computed(() => filteredOrdersForStats.value.reduce((sum, o) => sum + Number(o.cena || 0), 0))
+
+const getUserNameById = (userId) => users.value.find(u => u.id === userId)?.ime || 'Neznan'
+
+const formatOrderDateTime = (isoString) => {
+  const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return String(isoString || '')
+  const datePart = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+  const timePart = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${datePart} ${timePart}`
+}
+
+const filteredHistoryOrders = computed(() => {
+  const now = new Date()
+  const queryText = normalizedText(historySearch.value).trim().toLowerCase()
+  return [...allOrders.value]
+    .filter(o => {
+      if (historyStatusFilter.value === 'paid' && !o.placano) return false
+      if (historyStatusFilter.value === 'unpaid' && o.placano) return false
+      if (!orderMatchesActiveFilter(o, now)) return false
+      if (queryText) {
+        const playerName = normalizedText(getUserNameById(o.userId)).toLowerCase()
+        const itemName = normalizedText(o.ime).toLowerCase()
+        if (!playerName.includes(queryText) && !itemName.includes(queryText)) return false
+      }
+      return true
+    })
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+})
+
+const filteredHistoryTotal = computed(() => filteredHistoryOrders.value.reduce((sum, o) => sum + Number(o.cena || 0), 0))
 
 const filteredOrdersForMarket = computed(() => {
   const now = new Date()
@@ -2239,6 +2388,17 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .market-pill.top { background: #6a8f2a; }
 
 .chart-box { background: var(--item-bg); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
+.history-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 10px; }
+.history-filter-box { background: rgba(0, 0, 0, 0.14); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.history-filter-title { font-size: 12px; font-weight: 800; color: #aaa; text-transform: uppercase; }
+.history-months-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.history-months-row .btn-toggle { flex: 0 0 auto; padding: 6px 10px; font-size: 12px; }
+.history-months-input { width: 70px; text-align: center; }
+.history-date-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.history-date-row label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #aaa; font-weight: bold; }
+.history-log-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.history-log-header h3 { margin: 0; }
+.history-log-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .css-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 160px; margin-top: 20px; border-bottom: 1px solid #555; padding-bottom: 10px; }
 .bar-col { display: flex; flex-direction: column; align-items: center; width: 10%; height: 100%; justify-content: flex-end; }
 .bar-fill { background: #4caf50; width: 100%; border-radius: 4px 4px 0 0; min-height: 4%; display: flex; align-items: flex-start; justify-content: center; position: relative; transition: height 0.4s ease; }
