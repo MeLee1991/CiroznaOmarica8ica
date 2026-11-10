@@ -486,17 +486,129 @@
 
               <div class="admin-cat-block mt-15">
                 <div class="history-log-header">
-                  <h3>Zgodovina transakcij ({{ currentFilterLabel }}) — {{ filteredHistoryOrders.length }} vnosov ({{ filteredHistoryTotal.toFixed(2) }} €)</h3>
+                  <h3>Zgodovina po dnevih in urah ({{ currentFilterLabel }})</h3>
                   <div class="history-log-controls">
-                    <input v-model="historySearch" type="text" class="input-inline" placeholder="🔍 Išči igralca ali artikel...">
-                    <select v-model="historyStatusFilter" class="input-inline">
-                      <option value="all">Vse (Plačano + Odprto)</option>
-                      <option value="paid">Samo plačano</option>
-                      <option value="unpaid">Samo odprt dolg</option>
-                    </select>
+                    <button @click="historyViewMode = 'daily'" :class="['btn-toggle', 'btn-small', { active: historyViewMode === 'daily' }]">📅 Po dnevih & urah</button>
+                    <button @click="historyViewMode = 'unpaid'" :class="['btn-toggle', 'btn-small', { active: historyViewMode === 'unpaid' }]">👛 Pozabljena denarnica ({{ unpaidSummaryByPlayer.length }})</button>
+                    <button @click="historyViewMode = 'flat'" :class="['btn-toggle', 'btn-small', { active: historyViewMode === 'flat' }]">📋 Vse vrstice</button>
                   </div>
                 </div>
-                <div style="max-height: 420px; overflow-y: auto; margin-top: 10px;">
+
+                <div class="history-subfilters">
+                  <input v-model="historySearch" type="text" class="input-inline" style="flex: 1 1 180px;" placeholder="🔍 Išči igralca ali artikel...">
+                  <label class="history-inline-label">
+                    <span>Dan:</span>
+                    <input v-model="historySpecificDate" type="date" class="input-inline">
+                    <button v-if="historySpecificDate" @click="historySpecificDate = ''" class="btn-del-mini" title="Počisti izbrani dan">✖</button>
+                  </label>
+                  <label class="history-inline-label">
+                    <span>Ura:</span>
+                    <select v-model="historyHourFilter" class="input-inline">
+                      <option value="all">Vse ure (00-23h)</option>
+                      <option v-for="h in 24" :key="h - 1" :value="String(h - 1)">{{ String(h - 1).padStart(2, '0') }}:00 - {{ String(h - 1).padStart(2, '0') }}:59</option>
+                    </select>
+                  </label>
+                  <select v-model="historyStatusFilter" class="input-inline">
+                    <option value="all">Vse ({{ filteredHistoryOrders.length }} | {{ filteredHistoryTotal.toFixed(2) }} €)</option>
+                    <option value="paid">Samo plačano ({{ filteredHistoryPaidTotal.toFixed(2) }} €)</option>
+                    <option value="unpaid">Samo odprt dolg / neplačano ({{ filteredHistoryUnpaidTotal.toFixed(2) }} €)</option>
+                  </select>
+                </div>
+
+                <!-- 1. POZABLJENA DENARNICA (WHO FORGOT WALLET / UNPAID BILLS) -->
+                <div v-if="historyViewMode === 'unpaid'" class="mt-15">
+                  <div v-if="unpaidSummaryByPlayer.length === 0" style="text-align: center; color: #888; padding: 18px;">
+                    Nihče nima odprtega dolga v izbranem obdobju! 🎉
+                  </div>
+                  <div v-for="debtor in unpaidSummaryByPlayer" :key="debtor.userId" class="history-day-card unpaid-card">
+                    <div class="history-day-header" @click="toggleHistoryDayFold(`debtor_${debtor.userId}`)">
+                      <div class="history-day-title">
+                        <span class="fold-indicator">{{ isHistoryDayFolded(`debtor_${debtor.userId}`) ? '▸' : '▾' }}</span>
+                        <strong>👛 {{ debtor.ime }}</strong>
+                        <span class="history-badge-count">{{ debtor.orders.length }}× neplačano</span>
+                      </div>
+                      <div class="history-day-totals">
+                        <span class="market-pill raise">Dolg: {{ debtor.total.toFixed(2) }} €</span>
+                      </div>
+                    </div>
+                    <div v-show="!isHistoryDayFolded(`debtor_${debtor.userId}`)" class="history-day-body">
+                      <table class="stat-table">
+                        <thead>
+                          <tr>
+                            <th style="text-align: left;">Kdaj (Dan in ura)</th>
+                            <th style="text-align: left;">Artikel / Miza</th>
+                            <th style="text-align: right;">Znesek (€)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="ord in debtor.orders" :key="ord.id">
+                            <td style="text-align: left; white-space: nowrap; font-size: 12px; color: #aaa;">{{ formatOrderDateTime(ord.created_at) }}</td>
+                            <td style="text-align: left;">{{ ord.ime }}</td>
+                            <td style="text-align: right; font-weight: bold; color: #ff5252;">{{ ord.cena.toFixed(2) }} €</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. DAILY & HOURLY BREAKDOWN -->
+                <div v-else-if="historyViewMode === 'daily'" class="mt-15" style="max-height: 520px; overflow-y: auto;">
+                  <div v-if="historyGroupedByDay.length === 0" style="text-align: center; color: #888; padding: 18px;">
+                    Ni najdenih transakcij za izbrane filtre.
+                  </div>
+                  <div v-for="dayGroup in historyGroupedByDay" :key="dayGroup.dateKey" class="history-day-card">
+                    <div class="history-day-header" @click="toggleHistoryDayFold(dayGroup.dateKey)">
+                      <div class="history-day-title">
+                        <span class="fold-indicator">{{ isHistoryDayFolded(dayGroup.dateKey) ? '▸' : '▾' }}</span>
+                        <strong>📅 {{ dayGroup.label }}</strong>
+                        <span class="history-badge-count">{{ dayGroup.orders.length }} naročil</span>
+                      </div>
+                      <div class="history-day-totals">
+                        <span v-if="dayGroup.paidTotal > 0" class="market-pill renew">Plačano: {{ dayGroup.paidTotal.toFixed(2) }} €</span>
+                        <span v-if="dayGroup.unpaidTotal !== 0" class="market-pill raise">Odprto (dolg): {{ dayGroup.unpaidTotal.toFixed(2) }} €</span>
+                        <strong style="margin-left: 6px;">Skupaj: {{ dayGroup.total.toFixed(2) }} €</strong>
+                      </div>
+                    </div>
+
+                    <div v-show="!isHistoryDayFolded(dayGroup.dateKey)" class="history-day-body">
+                      <div class="history-hours-strip">
+                        <span v-for="hSlot in dayGroup.hours" :key="hSlot.hour"
+                              @click="historyHourFilter = historyHourFilter === String(hSlot.hour) ? 'all' : String(hSlot.hour)"
+                              :class="['hour-chip', { active: historyHourFilter === String(hSlot.hour), 'has-unpaid': hSlot.unpaidTotal > 0 }]"
+                              :title="`Klikni za filter ure ${hSlot.label}`">
+                          <strong>{{ hSlot.label }}</strong>: {{ hSlot.total.toFixed(2) }} € ({{ hSlot.count }}×)
+                        </span>
+                      </div>
+
+                      <table class="stat-table">
+                        <thead>
+                          <tr>
+                            <th style="text-align: left;">Ura</th>
+                            <th style="text-align: left;">Igralec</th>
+                            <th style="text-align: left;">Artikel / Storitev</th>
+                            <th style="text-align: center;">Status</th>
+                            <th style="text-align: right;">Znesek (€)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="order in dayGroup.orders" :key="order.id">
+                            <td style="text-align: left; white-space: nowrap; font-family: monospace; font-weight: bold; color: #aaa;">{{ formatOrderTimeOnly(order.created_at) }}</td>
+                            <td style="text-align: left; font-weight: bold;">{{ getUserNameById(order.userId) }}</td>
+                            <td style="text-align: left;">{{ order.ime }}</td>
+                            <td style="text-align: center;">
+                              <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Pozabljena denarnica (Odprto)' }}</span>
+                            </td>
+                            <td style="text-align: right; font-weight: bold;" :style="{ color: order.placano ? 'inherit' : '#ff5252' }">{{ order.cena.toFixed(2) }} €</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. FLAT TABLE VIEW -->
+                <div v-else style="max-height: 450px; overflow-y: auto; margin-top: 10px;">
                   <table class="stat-table">
                     <thead>
                       <tr>
@@ -513,9 +625,9 @@
                         <td style="text-align: left; font-weight: bold;">{{ getUserNameById(order.userId) }}</td>
                         <td style="text-align: left;">{{ order.ime }}</td>
                         <td style="text-align: center;">
-                          <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Odprto' }}</span>
+                          <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Pozabljena denarnica (Odprto)' }}</span>
                         </td>
-                        <td style="text-align: right; font-weight: bold;">{{ order.cena.toFixed(2) }} €</td>
+                        <td style="text-align: right; font-weight: bold;" :style="{ color: order.placano ? 'inherit' : '#ff5252' }">{{ order.cena.toFixed(2) }} €</td>
                       </tr>
                       <tr v-if="filteredHistoryOrders.length === 0">
                         <td colspan="5" style="text-align: center; color: #888; padding: 16px;">Ni najdenih transakcij za izbrano obdobje.</td>
@@ -860,6 +972,10 @@ const customDateFrom = ref('')
 const customDateTo = ref('')
 const historySearch = ref('')
 const historyStatusFilter = ref('all')
+const historyViewMode = ref('daily')
+const historySpecificDate = ref('')
+const historyHourFilter = ref('all')
+const foldedHistoryDays = ref([])
 const monthsList = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Avg', 'Sep', 'Okt', 'Nov', 'Dec']
 const marketSort = ref({ key: 'realizedProfit', dir: 'desc' })
 const inventorySort = ref({ key: 'ime', dir: 'asc' })
@@ -1873,6 +1989,24 @@ const formatOrderDateTime = (isoString) => {
   return `${datePart} ${timePart}`
 }
 
+const formatOrderTimeOnly = (isoString) => {
+  const d = new Date(isoString)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const toLocalDateKey = (dateObj) => {
+  if (Number.isNaN(dateObj.getTime())) return 'neznano'
+  return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`
+}
+
+const isHistoryDayFolded = (key) => foldedHistoryDays.value.includes(key)
+const toggleHistoryDayFold = (key) => {
+  const idx = foldedHistoryDays.value.indexOf(key)
+  if (idx === -1) foldedHistoryDays.value.push(key)
+  else foldedHistoryDays.value.splice(idx, 1)
+}
+
 const filteredHistoryOrders = computed(() => {
   const now = new Date()
   const queryText = normalizedText(historySearch.value).trim().toLowerCase()
@@ -1881,6 +2015,13 @@ const filteredHistoryOrders = computed(() => {
       if (historyStatusFilter.value === 'paid' && !o.placano) return false
       if (historyStatusFilter.value === 'unpaid' && o.placano) return false
       if (!orderMatchesActiveFilter(o, now)) return false
+      const d = new Date(o.created_at)
+      if (historySpecificDate.value) {
+        if (toLocalDateKey(d) !== historySpecificDate.value) return false
+      }
+      if (historyHourFilter.value !== 'all') {
+        if (d.getHours() !== Number(historyHourFilter.value)) return false
+      }
       if (queryText) {
         const playerName = normalizedText(getUserNameById(o.userId)).toLowerCase()
         const itemName = normalizedText(o.ime).toLowerCase()
@@ -1892,6 +2033,93 @@ const filteredHistoryOrders = computed(() => {
 })
 
 const filteredHistoryTotal = computed(() => filteredHistoryOrders.value.reduce((sum, o) => sum + Number(o.cena || 0), 0))
+const filteredHistoryPaidTotal = computed(() => filteredHistoryOrders.value.filter(o => o.placano).reduce((sum, o) => sum + Number(o.cena || 0), 0))
+const filteredHistoryUnpaidTotal = computed(() => filteredHistoryOrders.value.filter(o => !o.placano).reduce((sum, o) => sum + Number(o.cena || 0), 0))
+
+const historyGroupedByDay = computed(() => {
+  const groups = new Map()
+  const dayNames = ['Nedelja', 'Ponedeljek', 'Torek', 'Sreda', 'Četrtek', 'Petek', 'Sobota']
+  filteredHistoryOrders.value.forEach(order => {
+    const d = new Date(order.created_at)
+    const dateKey = toLocalDateKey(d)
+    if (!groups.has(dateKey)) {
+      const label = Number.isNaN(d.getTime())
+        ? 'Neznan datum'
+        : `${dayNames[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+      groups.set(dateKey, {
+        dateKey,
+        label,
+        total: 0,
+        paidTotal: 0,
+        unpaidTotal: 0,
+        orders: [],
+        hoursMap: new Map()
+      })
+    }
+    const group = groups.get(dateKey)
+    const price = Number(order.cena || 0)
+    group.orders.push(order)
+    group.total += price
+    if (order.placano) group.paidTotal += price
+    else group.unpaidTotal += price
+
+    const h = Number.isNaN(d.getTime()) ? 0 : d.getHours()
+    if (!group.hoursMap.has(h)) {
+      group.hoursMap.set(h, {
+        hour: h,
+        label: `${String(h).padStart(2, '0')}:00`,
+        total: 0,
+        unpaidTotal: 0,
+        count: 0
+      })
+    }
+    const hSlot = group.hoursMap.get(h)
+    hSlot.total += price
+    if (!order.placano) hSlot.unpaidTotal += price
+    hSlot.count += 1
+  })
+
+  return Array.from(groups.values()).map(g => ({
+    ...g,
+    hours: Array.from(g.hoursMap.values()).sort((a, b) => a.hour - b.hour)
+  }))
+})
+
+const unpaidSummaryByPlayer = computed(() => {
+  const now = new Date()
+  const queryText = normalizedText(historySearch.value).trim().toLowerCase()
+  const map = new Map()
+  allOrders.value.forEach(o => {
+    if (o.placano) return
+    if (!orderMatchesActiveFilter(o, now)) return
+    const d = new Date(o.created_at)
+    if (historySpecificDate.value && toLocalDateKey(d) !== historySpecificDate.value) return
+    if (historyHourFilter.value !== 'all' && d.getHours() !== Number(historyHourFilter.value)) return
+    const playerName = getUserNameById(o.userId)
+    if (queryText) {
+      const pLower = normalizedText(playerName).toLowerCase()
+      const iLower = normalizedText(o.ime).toLowerCase()
+      if (!pLower.includes(queryText) && !iLower.includes(queryText)) return
+    }
+    if (!map.has(o.userId)) {
+      map.set(o.userId, {
+        userId: o.userId,
+        ime: playerName,
+        total: 0,
+        orders: []
+      })
+    }
+    const entry = map.get(o.userId)
+    entry.total += Number(o.cena || 0)
+    entry.orders.push(o)
+  })
+  return Array.from(map.values())
+    .map(entry => ({
+      ...entry,
+      orders: entry.orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    }))
+    .sort((a, b) => b.total - a.total)
+})
 
 const filteredOrdersForMarket = computed(() => {
   const now = new Date()
@@ -2399,6 +2627,22 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .history-log-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .history-log-header h3 { margin: 0; }
 .history-log-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.history-subfilters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding: 10px; background: rgba(0, 0, 0, 0.14); border: 1px solid var(--border-color); border-radius: 8px; }
+.history-inline-label { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: bold; color: #aaa; }
+.history-day-card { border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 10px; background: rgba(0, 0, 0, 0.12); overflow: hidden; }
+.history-day-card.unpaid-card { border-left: 4px solid #ff5252; }
+.history-day-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: rgba(255, 255, 255, 0.03); cursor: pointer; user-select: none; }
+.history-day-header:hover { background: rgba(255, 255, 255, 0.06); }
+.history-day-title { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fold-indicator { font-weight: bold; color: #4caf50; width: 14px; text-align: center; }
+.history-badge-count { font-size: 11px; color: #aaa; background: var(--input-bg); border: 1px solid var(--border-color); padding: 2px 8px; border-radius: 999px; font-weight: bold; }
+.history-day-totals { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.history-day-body { padding: 10px 14px; border-top: 1px solid var(--border-color); }
+.history-hours-strip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.hour-chip { font-size: 11px; padding: 4px 9px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-color); cursor: pointer; transition: all 0.15s ease; }
+.hour-chip:hover { border-color: #4caf50; }
+.hour-chip.has-unpaid { border-color: rgba(255, 82, 82, 0.65); }
+.hour-chip.active { background: #2e7d32; border-color: #66bb6a; color: #fff; }
 .css-chart { display: flex; align-items: flex-end; justify-content: space-around; height: 160px; margin-top: 20px; border-bottom: 1px solid #555; padding-bottom: 10px; }
 .bar-col { display: flex; flex-direction: column; align-items: center; width: 10%; height: 100%; justify-content: flex-end; }
 .bar-fill { background: #4caf50; width: 100%; border-radius: 4px 4px 0 0; min-height: 4%; display: flex; align-items: flex-start; justify-content: center; position: relative; transition: height 0.4s ease; }
