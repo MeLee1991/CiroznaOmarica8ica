@@ -123,7 +123,10 @@
         
         <div v-if="userCurrentOrders.length > 0" class="tab-actions">
           <button v-if="canManageTab" @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
-          <button @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
+          <button v-if="canPayTab" @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
+          <div v-else class="device-locked-pay-notice" title="Ta naprava ni pooblaščena kot blagajna">
+            🔒 Plačilo možno samo na klubskem tabletu (ali v Admin načinu)
+          </div>
         </div>
       </div>
       <div v-else class="empty-state empty-state-compact">Izberi žrtev za prikaz računa.</div>
@@ -172,27 +175,50 @@
         <div v-if="!adminAuth" class="auth-box-compact">
           <h3>Vnesi kodo za sef</h3>
           <input id="fake-user" name="fake-user" type="text" style="display:none;">
-          <input v-model="passInput" type="password" id="safecode-input" class="input-field text-center secret-input input-compact" autocomplete="new-password" @keyup.enter="checkPass">
+          <input v-model="passInput" type="password" id="safecode-input" class="input-field text-center secret-input input-compact" autocomplete="new-password" :disabled="isLoginLocked" @keyup.enter="checkPass">
+          <div v-if="isLoginLocked" style="color: #ff5252; font-size: 12px; font-weight: bold; text-align: center; margin-bottom: 10px;">
+            Preveč poskusov! Počakaj {{ loginLockSecondsLeft }}s.
+          </div>
           <div class="auth-buttons-compact">
-            <button @click="checkPass" class="btn-start btn-compact-action">Vstopi</button>
+            <button @click="checkPass" class="btn-start btn-compact-action" :disabled="isLoginLocked">Vstopi</button>
             <button @click="closeAdmin" class="btn-stop btn-compact-action">Prekliči</button>
           </div>
           <button type="button" class="password-reset-toggle" @click="showPasswordReset = !showPasswordReset">
             Pozabljena koda?
           </button>
           <div v-if="showPasswordReset" class="password-reset-box">
-            <input v-model="resetEmail" type="email" class="input-inline" placeholder="Lastniški email">
+            <input v-model="resetEmail" type="email" class="input-inline" placeholder="Lastniški email" @keyup.enter="resetAdminPassword">
             <button @click="resetAdminPassword" class="btn-warn btn-compact-action">Reset na 8</button>
-            <small>Samo deevyezh@gmail.com lahko resetira kodo na tej napravi.</small>
+            <small>Samo deevyezh@gmail.com ali tomazbratina@gmail.com lahko resetirata kodo.</small>
           </div>
         </div>
 
         <!-- DASHBOARD CONTAINER -->
         <div v-else class="admin-dashboard">
           <div class="admin-security-row">
-            <input v-model="newAdminPassword" type="password" class="input-inline admin-pass-input" placeholder="Nova koda" autocomplete="new-password" @keyup.enter="changeAdminPassword">
+            <input v-model="newAdminPassword" type="password" class="input-inline admin-pass-input" placeholder="Nova koda (SHA-256)" autocomplete="new-password" @keyup.enter="changeAdminPassword">
             <input v-model="newAdminPasswordRepeat" type="password" class="input-inline admin-pass-input" placeholder="Ponovi kodo" autocomplete="new-password" @keyup.enter="changeAdminPassword">
             <button @click="changeAdminPassword" class="btn-start btn-small admin-pass-save">Shrani kodo</button>
+          </div>
+          <div class="admin-device-auth-bar">
+            <div class="device-auth-info">
+              <span :class="['device-status-pill', isCurrentDeviceAuthorized ? 'authorized' : 'unauthorized']">
+                {{ isCurrentDeviceAuthorized ? '✅ Ta naprava je pooblaščena blagajna' : '🔒 Ta naprava NI pooblaščena za plačila' }}
+              </span>
+              <code class="device-id-code" title="Kriptografski ID te naprave (namesto MAC)">ID: {{ currentDeviceShortId }}</code>
+            </div>
+            <div class="device-auth-actions">
+              <input v-if="!isCurrentDeviceAuthorized" v-model="newDeviceLabel" type="text" class="input-inline" style="width: 145px;" placeholder="Ime (npr. Klub Tablet)">
+              <button v-if="!isCurrentDeviceAuthorized" @click="authorizeCurrentDevice" class="btn-start btn-small">➕ Pooblasti to napravo</button>
+              <button v-else @click="revokeDevice(currentDeviceId)" class="btn-stop btn-small">Odstrani pooblastilo te naprave</button>
+              <span v-if="authorizedDevices.length > 0" class="device-count-tag" :title="authorizedDevices.map(d => `${d.label} (${d.shortId})`).join(', ')">
+                Pooblaščene naprave ({{ authorizedDevices.length }}):
+                <span v-for="dev in authorizedDevices" :key="dev.id" class="device-chip">
+                  {{ dev.label }} ({{ dev.shortId }})
+                  <button @click="revokeDevice(dev.id)" class="device-chip-remove" title="Odstrani napravo">✖</button>
+                </span>
+              </span>
+            </div>
           </div>
           <div class="admin-tabs">
             <button v-for="tab in adminTabs" :key="tab.id" @click="adminTab = tab.id" :class="['tab-btn', { active: adminTab === tab.id }]">
@@ -589,6 +615,7 @@
                             <th style="text-align: left;">Artikel / Storitev</th>
                             <th style="text-align: center;">Status</th>
                             <th style="text-align: right;">Znesek (€)</th>
+                            <th style="text-align: right;">Akcija</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -597,9 +624,14 @@
                             <td style="text-align: left; font-weight: bold;">{{ getUserNameById(order.userId) }}</td>
                             <td style="text-align: left;">{{ order.ime }}</td>
                             <td style="text-align: center;">
-                              <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Pozabljena denarnica (Odprto)' }}</span>
+                              <span :class="['market-pill', order.placano ? 'renew' : 'raise']" :title="order.paid_at ? `Plačano ob ${formatOrderDateTime(order.paid_at)} (${order.paid_by_device || 'blagajna'})` : ''">
+                                {{ order.placano ? (order.paid_at ? `Plačano (${formatOrderTimeOnly(order.paid_at)})` : 'Plačano') : 'Pozabljena denarnica (Odprto)' }}
+                              </span>
                             </td>
                             <td style="text-align: right; font-weight: bold;" :style="{ color: order.placano ? 'inherit' : '#ff5252' }">{{ order.cena.toFixed(2) }} €</td>
+                            <td style="text-align: right;">
+                              <button v-if="order.placano" @click="revertOrderPayment(order)" class="btn-warn btn-small" style="padding: 3px 8px; font-size: 11px;" title="Vrni nazaj v odprt dolg">↩ Vrni v dolg</button>
+                            </td>
                           </tr>
                         </tbody>
                       </table>
@@ -617,6 +649,7 @@
                         <th style="text-align: left;">Artikel / Storitev</th>
                         <th style="text-align: center;">Status</th>
                         <th style="text-align: right;">Znesek (€)</th>
+                        <th style="text-align: right;">Akcija</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -625,12 +658,17 @@
                         <td style="text-align: left; font-weight: bold;">{{ getUserNameById(order.userId) }}</td>
                         <td style="text-align: left;">{{ order.ime }}</td>
                         <td style="text-align: center;">
-                          <span :class="['market-pill', order.placano ? 'renew' : 'raise']">{{ order.placano ? 'Plačano' : 'Pozabljena denarnica (Odprto)' }}</span>
+                          <span :class="['market-pill', order.placano ? 'renew' : 'raise']" :title="order.paid_at ? `Plačano ob ${formatOrderDateTime(order.paid_at)} (${order.paid_by_device || 'blagajna'})` : ''">
+                            {{ order.placano ? (order.paid_at ? `Plačano (${formatOrderTimeOnly(order.paid_at)})` : 'Plačano') : 'Pozabljena denarnica (Odprto)' }}
+                          </span>
                         </td>
                         <td style="text-align: right; font-weight: bold;" :style="{ color: order.placano ? 'inherit' : '#ff5252' }">{{ order.cena.toFixed(2) }} €</td>
+                        <td style="text-align: right;">
+                          <button v-if="order.placano" @click="revertOrderPayment(order)" class="btn-warn btn-small" style="padding: 3px 8px; font-size: 11px;" title="Vrni nazaj v odprt dolg">↩ Vrni v dolg</button>
+                        </td>
                       </tr>
                       <tr v-if="filteredHistoryOrders.length === 0">
-                        <td colspan="5" style="text-align: center; color: #888; padding: 16px;">Ni najdenih transakcij za izbrano obdobje.</td>
+                        <td colspan="6" style="text-align: center; color: #888; padding: 16px;">Ni najdenih transakcij za izbrano obdobje.</td>
                       </tr>
                     </tbody>
                   </table>
@@ -909,7 +947,32 @@
 import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { supabase } from './supabaseClient'
 
-const DEFAULT_ADMIN_PASSWORD = '8'
+// SHA-256 hash of default password "8" (never store plain-text password in localStorage or DB)
+const DEFAULT_ADMIN_PASSWORD_HASH = '2c624232cdd221771294dfbb310aca000a0df6ac8b66b696d90ef06fdefb64a3'
+const ALLOWED_RESET_EMAILS = ['deevyezh@gmail.com', 'tomazbratina@gmail.com']
+
+const sha256Hex = async (text) => {
+  const data = new TextEncoder().encode(String(text))
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+const getOrCreateDeviceId = () => {
+  let id = localStorage.getItem('ciroznaDeviceId')
+  if (!id) {
+    const rand = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    const screenInfo = `${ window.screen?.width || 0 }x${ window.screen?.height || 0 }`
+    id = `DEV-${rand.slice(0, 8).toUpperCase()}-${screenInfo}`
+    localStorage.setItem('ciroznaDeviceId', id)
+  }
+  return id
+}
+
+const currentDeviceId = ref(getOrCreateDeviceId())
+const currentDeviceShortId = computed(() => currentDeviceId.value.replace(/^DEV-/, ''))
+const authorizedDevices = ref(JSON.parse(localStorage.getItem('ciroznaAuthorizedDevices') || '[]'))
+const newDeviceLabel = ref('Klubski Tablet')
+const isCurrentDeviceAuthorized = computed(() => authorizedDevices.value.some(d => d.id === currentDeviceId.value))
 
 const users = ref([])
 const drinks = ref([])
@@ -947,7 +1010,15 @@ const newAdminPassword = ref('')
 const newAdminPasswordRepeat = ref('')
 const resetEmail = ref('')
 const showPasswordReset = ref(false)
-const adminPassword = ref(localStorage.getItem('ciroznaAdminPassword') || DEFAULT_ADMIN_PASSWORD)
+const adminPasswordHash = ref(localStorage.getItem('ciroznaAdminPasswordHash') || DEFAULT_ADMIN_PASSWORD_HASH)
+const failedLoginAttempts = ref(0)
+const loginLockedUntil = ref(0)
+const nowTick = ref(Date.now())
+setInterval(() => { nowTick.value = Date.now() }, 1000)
+const isLoginLocked = computed(() => loginLockedUntil.value > nowTick.value)
+const loginLockSecondsLeft = computed(() => Math.max(0, Math.ceil((loginLockedUntil.value - nowTick.value) / 1000)))
+// Clean up legacy plain-text password from localStorage so nobody can read it in DevTools
+localStorage.removeItem('ciroznaAdminPassword')
 const newUser = ref({ ime: '', tip: 'nečlan' })
 const customCharge = ref({ ime: '', cena: null })
 const showCustomCharge = ref(false)
@@ -1216,8 +1287,36 @@ const normalizeOrderRow = (dbOrder) => ({
   ime: normalizedText(dbOrder.ime_artikla || 'Brez imena'),
   cena: toNumber(dbOrder.znesek),
   placano: Boolean(dbOrder.placano),
-  created_at: dbOrder.timestamp || new Date().toISOString()
+  created_at: dbOrder.timestamp || new Date().toISOString(),
+  paid_at: dbOrder.paid_at || null,
+  paid_by_device: dbOrder.paid_by_device || null
 })
+
+const syncAuthorizedDevices = async (list) => {
+  authorizedDevices.value = list
+  localStorage.setItem('ciroznaAuthorizedDevices', JSON.stringify(list))
+  await saveSettingDoc('authorizedDevices', list)
+}
+
+const authorizeCurrentDevice = async () => {
+  const label = normalizedText(newDeviceLabel.value).trim() || 'Klubski Tablet'
+  const entry = {
+    id: currentDeviceId.value,
+    shortId: currentDeviceShortId.value,
+    label,
+    added_at: new Date().toISOString()
+  }
+  const next = [...authorizedDevices.value.filter(d => d.id !== currentDeviceId.value), entry]
+  await syncAuthorizedDevices(next)
+  alert(`Naprava "${label}" (${currentDeviceShortId.value}) je zdaj pooblaščena blagajna!`)
+}
+
+const revokeDevice = async (deviceId) => {
+  const target = authorizedDevices.value.find(d => d.id === deviceId)
+  if (!confirm(`Odstranim pooblastilo za napravo "${target?.label || deviceId}"?`)) return
+  const next = authorizedDevices.value.filter(d => d.id !== deviceId)
+  await syncAuthorizedDevices(next)
+}
 
 const getDefaultTableTariff = () => (
   tariffs.value.find(t => normalizedText(t.kombinacija).toLowerCase() === 'član + nečlan')
@@ -1242,7 +1341,7 @@ const loadInitialData = async () => {
   const drinksResult = await supabase.from('drinks').select('*').eq('active', true)
   const tariffsResult = await supabase.from('tariffs').select('*')
   const ordersResult = await supabase.from('orders').select('*')
-  const scheduleResult = await supabase.from('settings').select('*').eq('key', 'backupSchedule')
+  const settingsResult = await supabase.from('settings').select('*')
   const errors = [
     formatDbError('users', usersResult.error),
     formatDbError('drinks', drinksResult.error),
@@ -1267,7 +1366,20 @@ const loadInitialData = async () => {
     const mappedOrders = ordersResult.data.map(normalizeOrderRow)
     allOrders.value = mappedOrders; currentOrders.value = mappedOrders.filter(order => !order.placano)
   }
-  if (scheduleResult.data?.[0]?.value) applyBackupSchedule(scheduleResult.data[0].value)
+  if (settingsResult.data) {
+    const scheduleDoc = settingsResult.data.find(s => s.key === 'backupSchedule')
+    if (scheduleDoc?.value) applyBackupSchedule(scheduleDoc.value)
+    const passHashDoc = settingsResult.data.find(s => s.key === 'adminPasswordHash')
+    if (passHashDoc?.value && typeof passHashDoc.value === 'string') {
+      adminPasswordHash.value = passHashDoc.value
+      localStorage.setItem('ciroznaAdminPasswordHash', passHashDoc.value)
+    }
+    const devicesDoc = settingsResult.data.find(s => s.key === 'authorizedDevices')
+    if (Array.isArray(devicesDoc?.value)) {
+      authorizedDevices.value = devicesDoc.value
+      localStorage.setItem('ciroznaAuthorizedDevices', JSON.stringify(devicesDoc.value))
+    }
+  }
 
   applyDefaultTariffToFreeTables()
 
@@ -1733,6 +1845,7 @@ const sortedUsers = computed(() => {
 
 const getUserDebt = (id) => currentOrders.value.filter(o => o.userId === id).reduce((sum, o) => sum + o.cena, 0)
 const canManageTab = computed(() => adminAuth.value)
+const canPayTab = computed(() => adminAuth.value || isCurrentDeviceAuthorized.value)
 const adminUsers = computed(() => {
   const direction = playerSort.value.dir === 'asc' ? 1 : -1
   return [...users.value].sort((a, b) => {
@@ -1852,11 +1965,35 @@ const clearTab = async () => {
 }
 
 const payTab = async () => { 
+  if (!canPayTab.value) return alert('Plačilo je dovoljeno samo na pooblaščenem klubskem tabletu ali v Admin načinu!')
   if(confirm(`Obračunam ${userTotalTab.value.toFixed(2)} € za ${activeUser.value.ime}?`)) {
     const orderIds = userCurrentOrders.value.map(o => o.id)
-    for(let id of orderIds) { await supabase.from('orders').update({ placano: true }).eq('id', id) }
-    allOrders.value.forEach(o => { if(orderIds.includes(o.id)) o.placano = true })
+    const paidAt = new Date().toISOString()
+    const deviceRecord = authorizedDevices.value.find(d => d.id === currentDeviceId.value)
+    const paidByDevice = adminAuth.value ? `Admin (${currentDeviceShortId.value})` : (deviceRecord?.label || currentDeviceShortId.value)
+    for(let id of orderIds) {
+      await supabase.from('orders').update({ placano: true, paid_at: paidAt, paid_by_device: paidByDevice }).eq('id', id)
+    }
+    allOrders.value.forEach(o => {
+      if(orderIds.includes(o.id)) {
+        o.placano = true
+        o.paid_at = paidAt
+        o.paid_by_device = paidByDevice
+      }
+    })
     currentOrders.value = currentOrders.value.filter(o => !orderIds.includes(o.id))
+  }
+}
+
+const revertOrderPayment = async (order) => {
+  if (!order || !order.placano) return
+  const playerName = getUserNameById(order.userId)
+  if (!confirm(`Vrnem "${order.ime}" (${order.cena.toFixed(2)} €) za igralca ${playerName} nazaj v odprt dolg?`)) return
+  await supabase.from('orders').update({ placano: false, paid_at: null }).eq('id', order.id)
+  order.placano = false
+  order.paid_at = null
+  if (!currentOrders.value.some(o => o.id === order.id)) {
+    currentOrders.value.push(order)
   }
 }
 
@@ -2318,22 +2455,51 @@ const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].ma
 const clearAdminInputs = () => { passInput.value = ''; newAdminPassword.value = ''; newAdminPasswordRepeat.value = ''; resetEmail.value = ''; showPasswordReset.value = false }
 const closeAdmin = () => { showAdmin.value = false; clearAdminInputs() }
 const lockAdmin = () => { adminAuth.value = false; showAdmin.value = false; showCustomCharge.value = false; clearAdminInputs() }
-const checkPass = () => { if(passInput.value === adminPassword.value) { adminAuth.value = true; showAdmin.value = false; clearAdminInputs() } else alert('Napačna koda!'); }
-const changeAdminPassword = () => {
+const checkPass = async () => {
+  if (isLoginLocked.value) return alert(`Preveč napačnih poskusov! Počakaj še ${loginLockSecondsLeft.value}s.`)
+  const inputHash = await sha256Hex(passInput.value)
+  if (inputHash === adminPasswordHash.value) {
+    failedLoginAttempts.value = 0
+    loginLockedUntil.value = 0
+    adminAuth.value = true
+    showAdmin.value = false
+    clearAdminInputs()
+  } else {
+    failedLoginAttempts.value += 1
+    if (failedLoginAttempts.value >= 5) {
+      loginLockedUntil.value = Date.now() + 60000
+      failedLoginAttempts.value = 0
+      alert('5 napačnih poskusov! Vnos kode je zaklenjen za 60 sekund.')
+    } else {
+      alert(`Napačna koda! (${5 - failedLoginAttempts.value} poskusov do zaklepa)`)
+    }
+  }
+}
+const changeAdminPassword = async () => {
   const nextPassword = newAdminPassword.value.trim()
   const repeatPassword = newAdminPasswordRepeat.value.trim()
   if (!nextPassword) return alert('Vpiši novo admin kodo.')
   if (nextPassword !== repeatPassword) return alert('Kodi se ne ujemata.')
-  adminPassword.value = nextPassword
-  localStorage.setItem('ciroznaAdminPassword', nextPassword)
+  const nextHash = await sha256Hex(nextPassword)
+  adminPasswordHash.value = nextHash
+  localStorage.setItem('ciroznaAdminPasswordHash', nextHash)
+  localStorage.removeItem('ciroznaAdminPassword')
+  await saveSettingDoc('adminPasswordHash', nextHash)
   newAdminPassword.value = ''
   newAdminPasswordRepeat.value = ''
-  alert('Admin koda je shranjena na tej napravi.')
+  alert('Nova admin koda je varno zakodirana (SHA-256) in shranjena.')
 }
-const resetAdminPassword = () => {
-  if (resetEmail.value.trim().toLowerCase() !== 'deevyezh@gmail.com') return alert('Reset lahko potrdi samo lastniški email.')
-  adminPassword.value = DEFAULT_ADMIN_PASSWORD
+const resetAdminPassword = async () => {
+  const email = resetEmail.value.trim().toLowerCase()
+  if (!ALLOWED_RESET_EMAILS.includes(email)) {
+    return alert('Reset lahko potrdi samo deevyezh@gmail.com ali tomazbratina@gmail.com.')
+  }
+  adminPasswordHash.value = DEFAULT_ADMIN_PASSWORD_HASH
+  localStorage.setItem('ciroznaAdminPasswordHash', DEFAULT_ADMIN_PASSWORD_HASH)
   localStorage.removeItem('ciroznaAdminPassword')
+  await saveSettingDoc('adminPasswordHash', DEFAULT_ADMIN_PASSWORD_HASH)
+  failedLoginAttempts.value = 0
+  loginLockedUntil.value = 0
   clearAdminInputs()
   alert('Admin koda je resetirana na 8.')
 }
@@ -2465,6 +2631,7 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 .order-controls .btn-del-mini { grid-column: 5; }
 .tab-actions { display: flex; gap: 10px; align-items: stretch; }
 .btn-pay { background: #1976d2; color: white; border: none; padding: 15px; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 16px; }
+.device-locked-pay-notice { flex: 2; padding: 12px 10px; border-radius: 6px; background: rgba(198, 40, 40, 0.16); border: 1px dashed rgba(255, 82, 82, 0.55); color: #ff8a80; font-size: 12px; font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; }
 .empty-state { text-align: center; padding: 30px; color: #888; font-style: italic; }
 
 /* ADMIN MODAL WINDOW */
@@ -2484,9 +2651,19 @@ h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-
 
 /* ADMIN INSIDE */
 .admin-dashboard { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.admin-security-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 10px; padding: 8px 10px; border: 1px solid rgba(76,175,80,0.45); border-radius: 8px; background: rgba(76,175,80,0.1); }
+.admin-security-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 8px; padding: 8px 10px; border: 1px solid rgba(76,175,80,0.45); border-radius: 8px; background: rgba(76,175,80,0.1); }
 .admin-pass-input { width: 100%; box-sizing: border-box; }
 .admin-pass-save { width: auto; white-space: nowrap; }
+.admin-device-auth-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0, 0, 0, 0.16); font-size: 12px; }
+.device-auth-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.device-status-pill { padding: 4px 9px; border-radius: 999px; font-weight: 800; font-size: 11px; }
+.device-status-pill.authorized { background: rgba(46, 125, 50, 0.28); border: 1px solid #66bb6a; color: #7ee787; }
+.device-status-pill.unauthorized { background: rgba(198, 40, 40, 0.22); border: 1px solid #ff5252; color: #ff8a80; }
+.device-id-code { background: var(--input-bg); padding: 3px 7px; border-radius: 4px; border: 1px solid var(--border-color); color: #aaa; font-size: 11px; }
+.device-auth-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.device-count-tag { display: inline-flex; align-items: center; gap: 5px; flex-wrap: wrap; color: #aaa; font-weight: bold; }
+.device-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--input-bg); border: 1px solid var(--border-color); padding: 2px 7px; border-radius: 999px; color: var(--text-color); font-size: 11px; }
+.device-chip-remove { background: transparent; border: none; color: #ff5252; cursor: pointer; font-weight: bold; padding: 0 2px; font-size: 11px; }
 .admin-tabs { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; flex: 0 0 auto; }
 .tab-btn { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); color: #a7a7ad; border: 1px solid var(--border-color); font-size: 13px; cursor: pointer; font-weight: bold; padding: 8px 12px; border-radius: 999px; transition: all 0.18s ease; }
 .tab-btn:hover { color: var(--text-color); border-color: rgba(76,175,80,0.55); }
