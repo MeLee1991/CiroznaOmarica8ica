@@ -13,7 +13,7 @@
         <input v-model="search" type="text" placeholder="🔍 Išči..." class="input-field shadow-input" autocomplete="off" />
       </div>
       
-      <div class="quick-add" style="margin-bottom: 25px;">
+      <div v-if="adminAuth" class="quick-add" style="margin-bottom: 25px;">
         <input v-model="newUser.ime" type="text" placeholder="Ime..." class="input-field" autocomplete="new-password" @keyup.enter="addUser" />
         <div class="btn-group-row">
           <button @click="newUser.tip = 'član'" :class="['btn-toggle', { active: newUser.tip === 'član' }]">Član</button>
@@ -33,7 +33,7 @@
             <span v-if="getUserDebt(user.id) !== 0" :class="['user-debt-line', getUserDebt(user.id) > 0 ? 'debt-warning' : 'credit-warning']">{{ getUserDebt(user.id).toFixed(2) }} €</span>
           </div>
 
-          <div class="user-actions">
+          <div v-if="adminAuth" class="user-actions">
             <button @click.stop="editUser(user)" class="btn-icon">✎</button>
             <!-- <button @click.stop="deleteUser(user)" class="btn-icon btn-del-red">✖</button> -->
           </div>
@@ -1820,17 +1820,20 @@ const toggleUserStatus = async (user) => {
   if (!error) user.tip = newTip
 }
 const addUser = async () => { 
+  if (!adminAuth.value) return alert('Dodajanje igralcev je dovoljeno samo v Admin načinu!')
   if(!newUser.value.ime) return; 
   const { data } = await supabase.from('users').insert([newUser.value]).select()
   if(data) { users.value = [...users.value, data[0]]; newUser.value.ime = ''; }
 }
 const deleteUser = async (u) => { 
+  if (!adminAuth.value) return alert('Brisanje igralcev je dovoljeno samo v Admin načinu!')
   if(confirm(`Izbrišem: ${u.ime}?`)) { 
     await supabase.from('users').delete().eq('id', u.id)
     users.value = users.value.filter(us => us.id !== u.id); if (activeUser.value?.id === u.id) activeUser.value = null
   } 
 }
 const editUser = async (u) => { 
+  if (!adminAuth.value) return alert('Preimenovanje igralcev je dovoljeno samo v Admin načinu!')
   const n = prompt('Preimenuj žrtev:', u.ime)
   if(n && n.trim() !== '') { await supabase.from('users').update({ ime: n }).eq('id', u.id); u.ime = n; } 
 }
