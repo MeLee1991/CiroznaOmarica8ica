@@ -896,6 +896,9 @@
                         <input v-model="backupSchedule.weeklyTime" type="time" class="input-inline">
                       </label>
                     </div>
+                    <small style="display: block; margin-top: 8px; color: #9aa0a6; font-size: 11px;">
+                      Opomba: Če v Resend še ni potrjena lastna domena, se vsi backupi samodejno preusmerijo na verificiran Resend račun (tomazbratina@gmail.com), zato noben backup ne pade!
+                    </small>
 
                     <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px;">
                       <button @click="saveBackupSchedule" class="btn-start btn-small backup-schedule-save" style="margin-top: 0;">Shrani urnik</button>
@@ -2618,7 +2621,19 @@ const resetAdminPassword = async () => {
 </script>
 
 <style scoped>
-:global(html), :global(body) { overscroll-behavior-y: none; overscroll-behavior-x: auto; touch-action: pan-x pan-y; margin: 0; padding: 0; overflow: auto; }
+:global(html), :global(body) { overscroll-behavior-y: none; overscroll-behavior-x: auto; touch-action: manipulation; margin: 0; padding: 0; overflow: auto; -webkit-tap-highlight-color: transparent; }
+:global(button), :global(label), :global(select), :global(input), .user-item, .btn-drink, .hour-chip, .history-day-header { touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; }
+:global(input), :global(select) { user-select: text; }
+
+/* Disable sticky hover states on touch devices (iPad/iPhone/Android) so buttons never require a double-tap! */
+@media (hover: none), (pointer: coarse) {
+  .user-item:hover { background: var(--item-bg) !important; }
+  .selected-user:hover { background: #354a35 !important; }
+  .order-name:hover { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .order-name.expanded:hover { white-space: normal; overflow: visible; text-overflow: clip; }
+  .stat-table tr:hover td { background: transparent !important; }
+  .history-day-header:hover { background: rgba(255, 255, 255, 0.03) !important; }
+}
 
 /* THEME VARIABLAS */
 .kiosk-container.dark { --bg-color: #121212; --panel-bg: #1e1e24; --text-color: #eaeaea; --border-color: #333333; --input-bg: #2a2a35; --item-bg: #25252d; }

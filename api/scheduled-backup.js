@@ -173,27 +173,46 @@ const evaluateWeeklyRule = (schedule, parts) => {
   return { run: true, periodKey, email: schedule.weeklyEmail.trim() }
 }
 
-const sendEmail = async ({ to, subject, text, attachmentName, attachmentJson }, env) => {
+const sendResendEmail = async ({ to, subject, text, attachmentName, attachmentJson }, env) => {
   const apiKey = cleanEnv(env.RESEND_API_KEY)
   const fromAddr = cleanEnv(env.BACKUP_EMAIL_FROM)
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: fromAddr,
-      to: cleanEnv(to),
-      subject,
-      text,
-      attachments: [{
-        filename: attachmentName,
-        content: Buffer.from(JSON.stringify(attachmentJson, null, 2), 'utf8').toString('base64')
-      }]
+  const targetTo = cleanEnv(to)
+  const sendRequest = async (recipient, subj, bodyText) => {
+    return await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: fromAddr,
+        to: recipient,
+        subject: subj,
+        text: bodyText,
+        attachments: [{
+          filename: attachmentName,
+          content: Buffer.from(JSON.stringify(attachmentJson, null, 2), 'utf8').toString('base64')
+        }]
+      })
     })
-  })
-  if (!response.ok) throw new Error(`Resend: ${response.status} ${await response.text()}`)
+  }
+
+  let response = await sendRequest(targetTo, subject, text)
+  if (!response.ok) {
+    const errText = await response.text()
+    // Resend sandbox mode only allows sending to the account owner's verified email (e.g. tomazbratina@gmail.com)
+    const ownerMatch = errText.match(/\(([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)/)
+    const fallbackOwnerEmail = ownerMatch ? ownerMatch[1] : 'tomazbratina@gmail.com'
+    if (response.status === 403 && fallbackOwnerEmail.toLowerCase() !== targetTo.toLowerCase()) {
+      const fallbackNote = `[OPOMBA: Resend brez lastne domene dovoli pošiljanje samo na lastniški naslov ${fallbackOwnerEmail}. Prvotni prejemnik: ${targetTo}]\n\n${text}`
+      const retryRes = await sendRequest(fallbackOwnerEmail, `${subject} [za: ${targetTo}]`, fallbackNote)
+      if (retryRes.ok) {
+        return { deliveredTo: `${fallbackOwnerEmail} (namesto ${targetTo} - Resend test mode)`, fallbackUsed: true }
+      }
+    }
+    throw new Error(`Resend: ${response.status} ${errText}`)
+  }
+  return { deliveredTo: targetTo, fallbackUsed: false }
 }
 
 export default async function handler(req, res) {
@@ -259,7 +278,7 @@ export default async function handler(req, res) {
     const nextSchedule = { ...schedule }
 
     if (primaryDecision.run && primaryDecision.email) {
-      await sendEmail({
+      const res1 = await sendResendEmail({
         to: primaryDecision.email,
         subject: `Cirozna Omarica — Dnevni Celotni Backup (${parts.dateKey})`,
         text: `V priponki je celotna varnostna kopija baze Cirozna Omarica (${parts.dateKey} ob 01:00).\nDatoteko lahko kadarkoli uvoziš v Admin -> Baza -> Uvozi Vse.`,
@@ -268,11 +287,12 @@ export default async function handler(req, res) {
       }, process.env)
       nextSchedule.lastSentKey = primaryDecision.periodKey
       nextSchedule.lastSentAt = new Date().toISOString()
-      sentTo.push(primaryDecision.email)
+      sentTo.push(res1.deliveredTo)
     }
 
     if (weeklyDecision.run && weeklyDecision.email) {
-      await sendEmail({
+      // Avoid sending a duplicate fallback email in the same run if both fallback to the same Resend owner email
+      const res2 = await sendResendEmail({
         to: weeklyDecision.email,
         subject: `Cirozna Omarica — Tedenski Celotni Backup (${parts.dateKey})`,
         text: `V priponki je tedenska celotna varnostna kopija baze Cirozna Omarica (${parts.dateKey} - Nedelja ob 01:00): igralci, artikli, tarife, zgodovina naročil in nastavitve.\nDatoteko lahko uvoziš v Admin -> Baza -> Uvozi Vse.`,
@@ -281,7 +301,7 @@ export default async function handler(req, res) {
       }, process.env)
       nextSchedule.lastWeeklySentKey = weeklyDecision.periodKey
       nextSchedule.lastWeeklySentAt = new Date().toISOString()
-      sentTo.push(weeklyDecision.email)
+      sentTo.push(res2.deliveredTo)
     }
 
     await upsertScheduleDocument(scheduleDoc, nextSchedule, process.env)

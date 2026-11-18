@@ -305,9 +305,11 @@ code {
   border-radius: 8px;
   border-left: 4px solid transparent;
   cursor: pointer;
-  transition: all 0.2s;
+  touch-action: manipulation;
 }
-.user-item:hover { background: #3a3a4a; }
+@media (hover: hover) and (pointer: fine) {
+  .user-item:hover { background: #3a3a4a; }
+}
 .selected-user { 
   background: #3e503e !important; 
   border-left: 4px solid #4caf50; 
