@@ -37,8 +37,12 @@ const toFirestoreFields = (data) => Object.fromEntries(
   Object.entries(data).map(([key, value]) => [key, toFirestoreValue(value)])
 )
 
+const cleanEnv = (val) => String(val || '').trim().replace(/^["']|["']$/g, '')
+
 const fetchCollection = async (collectionName, env) => {
-  const url = `${FIRESTORE_BASE(env.VITE_FIREBASE_PROJECT_ID)}/${collectionName}?key=${env.VITE_FIREBASE_API_KEY}&pageSize=1000`
+  const projectId = cleanEnv(env.VITE_FIREBASE_PROJECT_ID)
+  const apiKey = cleanEnv(env.VITE_FIREBASE_API_KEY)
+  const url = `${FIRESTORE_BASE(projectId)}/${collectionName}?key=${apiKey}&pageSize=1000`
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Firestore ${collectionName}: ${response.status}`)
   const payload = await response.json()
@@ -50,13 +54,15 @@ const fetchCollection = async (collectionName, env) => {
 }
 
 const upsertScheduleDocument = async (scheduleDoc, valueData, env) => {
+  const projectId = cleanEnv(env.VITE_FIREBASE_PROJECT_ID)
+  const apiKey = cleanEnv(env.VITE_FIREBASE_API_KEY)
   const payload = {
     key: 'backupSchedule',
     value: valueData,
     updated_at: new Date().toISOString()
   }
   if (scheduleDoc?._docName) {
-    const url = `https://firestore.googleapis.com/v1/${scheduleDoc._docName}?key=${env.VITE_FIREBASE_API_KEY}`
+    const url = `https://firestore.googleapis.com/v1/${scheduleDoc._docName}?key=${apiKey}`
     const response = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -64,7 +70,7 @@ const upsertScheduleDocument = async (scheduleDoc, valueData, env) => {
     })
     if (!response.ok) throw new Error(`Firestore patch: ${response.status}`)
   } else {
-    const url = `${FIRESTORE_BASE(env.VITE_FIREBASE_PROJECT_ID)}/settings?key=${env.VITE_FIREBASE_API_KEY}`
+    const url = `${FIRESTORE_BASE(projectId)}/settings?key=${apiKey}`
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,27 +80,48 @@ const upsertScheduleDocument = async (scheduleDoc, valueData, env) => {
   }
 }
 
-const nowParts = (timeZone) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    weekday: 'short',
-    hour12: false
-  }).formatToParts(new Date())
-  const map = Object.fromEntries(parts.map(part => [part.type, part.value]))
-  const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+const nowParts = (rawTimeZone) => {
+  const cleanTz = String(rawTimeZone || 'Europe/Ljubljana').trim().replace(/^["']|["']$/g, '')
+  const fallbackZones = [cleanTz, 'Europe/Ljubljana', 'Europe/Vienna', 'CET', 'UTC']
+  for (const tz of fallbackZones) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: tz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        weekday: 'short',
+        hour12: false
+      }).formatToParts(new Date())
+      const map = Object.fromEntries(parts.map(part => [part.type, part.value]))
+      const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+      return {
+        year: Number(map.year),
+        month: Number(map.month),
+        day: Number(map.day),
+        hour: Number(map.hour),
+        minute: Number(map.minute),
+        weekday: weekdayMap[map.weekday],
+        dateKey: `${map.year}-${map.month}-${map.day}`
+      }
+    } catch {
+      // try next timezone or fallback
+    }
+  }
+  const d = new Date(Date.now() + 3600000)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
   return {
-    year: Number(map.year),
-    month: Number(map.month),
-    day: Number(map.day),
-    hour: Number(map.hour),
-    minute: Number(map.minute),
-    weekday: weekdayMap[map.weekday],
-    dateKey: `${map.year}-${map.month}-${map.day}`
+    year: y,
+    month: Number(m),
+    day: Number(day),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    weekday: d.getUTCDay(),
+    dateKey: `${y}-${m}-${day}`
   }
 }
 
@@ -147,15 +174,17 @@ const evaluateWeeklyRule = (schedule, parts) => {
 }
 
 const sendEmail = async ({ to, subject, text, attachmentName, attachmentJson }, env) => {
+  const apiKey = cleanEnv(env.RESEND_API_KEY)
+  const fromAddr = cleanEnv(env.BACKUP_EMAIL_FROM)
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      from: env.BACKUP_EMAIL_FROM,
-      to,
+      from: fromAddr,
+      to: cleanEnv(to),
       subject,
       text,
       attachments: [{
@@ -169,15 +198,16 @@ const sendEmail = async ({ to, subject, text, attachmentName, attachmentJson }, 
 
 export default async function handler(req, res) {
   try {
-    if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    const cronSecret = cleanEnv(process.env.CRON_SECRET)
+    const forceSend = req.query?.force === '1' || req.url?.includes('force=1')
+    if (!forceSend && cronSecret && req.headers.authorization !== `Bearer ${cronSecret}`) {
       return jsonResponse(res, 401, { ok: false, error: 'unauthorized' })
     }
 
     const required = ['VITE_FIREBASE_PROJECT_ID', 'VITE_FIREBASE_API_KEY', 'RESEND_API_KEY', 'BACKUP_EMAIL_FROM']
-    const missing = required.filter(key => !process.env[key])
+    const missing = required.filter(key => !cleanEnv(process.env[key]))
     if (missing.length) return jsonResponse(res, 500, { ok: false, error: `Missing env: ${missing.join(', ')}` })
 
-    const forceSend = req.query?.force === '1' || req.url?.includes('force=1')
     const settingsDocs = await fetchCollection('settings', process.env)
     const scheduleDoc = settingsDocs.find(item => item.key === 'backupSchedule')
     const appSettingsDoc = settingsDocs.find(item => item.key === 'appSettingsBackup')
