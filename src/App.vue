@@ -13,7 +13,7 @@
         <input v-model="search" type="text" placeholder="🔍 Išči..." class="input-field shadow-input" autocomplete="off" />
       </div>
       
-      <div v-if="adminAuth" class="quick-add" style="margin-bottom: 25px;">
+      <div class="quick-add" style="margin-bottom: 25px;">
         <input v-model="newUser.ime" type="text" placeholder="Ime..." class="input-field" autocomplete="new-password" @keyup.enter="addUser" />
         <div class="btn-group-row">
           <button @click="newUser.tip = 'član'" :class="['btn-toggle', { active: newUser.tip === 'član' }]">Član</button>
@@ -835,14 +835,15 @@
                     </div>
                   </div>
                   <div class="backup-schedule-box">
+                    <h4 style="margin: 0 0 10px; font-size: 14px; color: #7ee787;">1. Dnevni Celotni Backup (Super Admin — vsak dan ob 01:00)</h4>
                     <div class="settings-grid">
                       <label class="check-row">
                         <input type="checkbox" v-model="backupSchedule.enabled">
-                        <span>Samodejni email backup</span>
+                        <span>Dnevni email backup</span>
                       </label>
                       <label>
-                        <span>Email naslov</span>
-                        <input v-model="backupSchedule.email" type="email" class="input-inline" placeholder="ime@email.com">
+                        <span>Glavni email (Super Admin)</span>
+                        <input v-model="backupSchedule.email" type="email" class="input-inline" placeholder="deevyezh@gmail.com">
                       </label>
                       <label>
                         <span>Ponavljanje</span>
@@ -872,7 +873,34 @@
                         <input v-model.number="backupSchedule.intervalDays" type="number" min="1" max="365" class="input-inline">
                       </label>
                     </div>
-                    <button @click="saveBackupSchedule" class="btn-start btn-small backup-schedule-save">Shrani urnik</button>
+
+                    <hr style="border-color: var(--border-color); margin: 14px 0;">
+                    <h4 style="margin: 0 0 10px; font-size: 14px; color: #58a6ff;">2. Tedenski Celotni Backup (Dodatni prejemnik — Nedelja ob 01:00)</h4>
+                    <div class="settings-grid">
+                      <label class="check-row">
+                        <input type="checkbox" v-model="backupSchedule.weeklyEnabled">
+                        <span>Tedenski email backup (vsi podatki za uvoz)</span>
+                      </label>
+                      <label>
+                        <span>Tedenski email naslov</span>
+                        <input v-model="backupSchedule.weeklyEmail" type="email" class="input-inline" placeholder="blaz.kolenc@gmail.com">
+                      </label>
+                      <label>
+                        <span>Dan v tednu</span>
+                        <select v-model.number="backupSchedule.weeklyWeekday" class="input-inline">
+                          <option v-for="day in scheduleWeekdays" :key="day.value" :value="day.value">{{ day.label }}</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Ura</span>
+                        <input v-model="backupSchedule.weeklyTime" type="time" class="input-inline">
+                      </label>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px;">
+                      <button @click="saveBackupSchedule" class="btn-start btn-small backup-schedule-save" style="margin-top: 0;">Shrani urnik</button>
+                      <button @click="triggerBackupEmailNow" class="btn-start btn-blue btn-small" style="margin-top: 0;">📧 Pošlji celotni backup na email zdaj</button>
+                    </div>
                   </div>
                 </div>
 
@@ -1061,16 +1089,34 @@ const scheduleWeekdays = [
   { value: 0, label: 'Nedelja' }
 ]
 const defaultBackupSchedule = {
-  enabled: false,
-  email: '',
-  frequency: 'weekly',
-  time: '08:00',
-  weekday: 1,
+  enabled: true,
+  email: 'deevyezh@gmail.com',
+  frequency: 'daily',
+  time: '01:00',
+  weekday: 0,
   dayOfMonth: 1,
   intervalDays: 7,
-  lastSentKey: ''
+  lastSentKey: '',
+  weeklyEnabled: true,
+  weeklyEmail: 'blaz.kolenc@gmail.com',
+  weeklyWeekday: 0,
+  weeklyTime: '01:00',
+  lastWeeklySentKey: ''
 }
-const backupSchedule = reactive({ ...defaultBackupSchedule, ...(JSON.parse(localStorage.getItem('ciroznaBackupSchedule')) || {}) })
+const storedSchedule = JSON.parse(localStorage.getItem('ciroznaBackupSchedule') || '{}')
+if (!storedSchedule.email) {
+  storedSchedule.enabled = true
+  storedSchedule.email = 'deevyezh@gmail.com'
+  storedSchedule.frequency = 'daily'
+  storedSchedule.time = '01:00'
+}
+if (!storedSchedule.weeklyEmail) {
+  storedSchedule.weeklyEnabled = true
+  storedSchedule.weeklyEmail = 'blaz.kolenc@gmail.com'
+  storedSchedule.weeklyWeekday = 0
+  storedSchedule.weeklyTime = '01:00'
+}
+const backupSchedule = reactive({ ...defaultBackupSchedule, ...storedSchedule })
 
 const setFilter = (f) => { activeFilter.value = f; }
 const setMonthFilter = (mIndex) => { selectedMonth.value = mIndex; activeFilter.value = 'custom_month'; }
@@ -1157,7 +1203,11 @@ if (ui.inventorySellLabel === 'Prodajna €/kos') ui.inventorySellLabel = 'Proda
 if (ui.inventoryStockProfitLabel === 'Zaloga profit') ui.inventoryStockProfitLabel = 'Zalog prof.'
 if (ui.inventoryStockProfitLabel === 'Zalog prof.') ui.inventoryStockProfitLabel = 'Zaloga prof.'
 
-const saveUISettings = () => { localStorage.setItem('ciroznaUI', JSON.stringify(ui)); alert('Nastavitve shranjene!'); }
+const saveUISettings = async () => {
+  localStorage.setItem('ciroznaUI', JSON.stringify(ui))
+  await saveSettingDoc('appSettingsBackup', buildSettingsBackup())
+  alert('Nastavitve shranjene!')
+}
 
 const customCssVars = computed(() => {
   const left = Number(ui.leftColPct) || 23
@@ -1232,7 +1282,20 @@ const formatDbError = (table, error) => {
 }
 
 const applyBackupSchedule = (schedule = {}) => {
-  Object.assign(backupSchedule, { ...defaultBackupSchedule, ...schedule })
+  const merged = { ...defaultBackupSchedule, ...schedule }
+  if (!merged.email) {
+    merged.enabled = true
+    merged.email = 'deevyezh@gmail.com'
+    merged.frequency = 'daily'
+    merged.time = '01:00'
+  }
+  if (!merged.weeklyEmail) {
+    merged.weeklyEnabled = true
+    merged.weeklyEmail = 'blaz.kolenc@gmail.com'
+    merged.weeklyWeekday = 0
+    merged.weeklyTime = '01:00'
+  }
+  Object.assign(backupSchedule, merged)
   localStorage.setItem('ciroznaBackupSchedule', JSON.stringify(backupSchedule))
 }
 
@@ -1245,11 +1308,28 @@ const saveSettingDoc = async (key, value) => {
 }
 
 const saveBackupSchedule = async () => {
-  if (backupSchedule.enabled && !backupSchedule.email.trim()) return alert('Vpiši email naslov za backup.')
+  if (backupSchedule.enabled && !backupSchedule.email.trim()) return alert('Vpiši glavni email naslov za backup.')
+  if (backupSchedule.weeklyEnabled && !backupSchedule.weeklyEmail.trim()) return alert('Vpiši tedenski email naslov za backup.')
   localStorage.setItem('ciroznaBackupSchedule', JSON.stringify(backupSchedule))
+  await saveSettingDoc('appSettingsBackup', buildSettingsBackup())
   const { error } = await saveSettingDoc('backupSchedule', JSON.parse(JSON.stringify(backupSchedule)))
   if (error) return alert('Urnika ne morem shraniti v bazo.')
   alert('Urnik backupa je shranjen.')
+}
+
+const triggerBackupEmailNow = async () => {
+  try {
+    await saveSettingDoc('appSettingsBackup', buildSettingsBackup())
+    await saveSettingDoc('backupSchedule', JSON.parse(JSON.stringify(backupSchedule)))
+    const res = await fetch('/api/scheduled-backup?force=1')
+    const data = await res.json()
+    if (!res.ok || !data.ok) {
+      return alert(`Pošiljanje ni uspelo: ${data.error || res.status}`)
+    }
+    alert(`Celotni backup uspešno poslan na: ${(data.to || []).join(', ')}`)
+  } catch (err) {
+    alert(`Napaka pri klicu strežnika za backup: ${err.message}`)
+  }
 }
 
 const toNumber = (value, fallback = 0) => {
@@ -1368,7 +1448,12 @@ const loadInitialData = async () => {
   }
   if (settingsResult.data) {
     const scheduleDoc = settingsResult.data.find(s => s.key === 'backupSchedule')
-    if (scheduleDoc?.value) applyBackupSchedule(scheduleDoc.value)
+    if (scheduleDoc?.value) {
+      applyBackupSchedule(scheduleDoc.value)
+    } else {
+      await saveSettingDoc('backupSchedule', JSON.parse(JSON.stringify(backupSchedule)))
+      await saveSettingDoc('appSettingsBackup', buildSettingsBackup())
+    }
     const passHashDoc = settingsResult.data.find(s => s.key === 'adminPasswordHash')
     if (passHashDoc?.value && typeof passHashDoc.value === 'string') {
       adminPasswordHash.value = passHashDoc.value
@@ -1584,9 +1669,24 @@ const buildSettingsBackup = () => ({
   specialTariffModifier: specialTariffModifier.value,
   flatRateActive: flatRateActive.value,
   flatRateValue: flatRateValue.value,
-  backupSchedule: JSON.parse(JSON.stringify(backupSchedule))
+  backupSchedule: JSON.parse(JSON.stringify(backupSchedule)),
+  authorizedDevices: JSON.parse(JSON.stringify(authorizedDevices.value)),
+  adminPasswordHash: adminPasswordHash.value
 })
-const applySettingsBackup = (settings = {}) => {
+const applySettingsBackup = (rawSettings = {}) => {
+  let settings = rawSettings
+  if (Array.isArray(rawSettings)) {
+    const appDoc = rawSettings.find(s => s.key === 'appSettingsBackup')
+    const schedDoc = rawSettings.find(s => s.key === 'backupSchedule')
+    const devDoc = rawSettings.find(s => s.key === 'authorizedDevices')
+    const passDoc = rawSettings.find(s => s.key === 'adminPasswordHash')
+    settings = {
+      ...(appDoc?.value || {}),
+      backupSchedule: schedDoc?.value,
+      authorizedDevices: devDoc?.value,
+      adminPasswordHash: passDoc?.value
+    }
+  }
   if (settings.ui) Object.assign(ui, settings.ui)
   if (settings.adminTabLabels) Object.assign(adminTabLabels, settings.adminTabLabels)
   const replaceReactiveArray = (target, value) => {
@@ -1596,6 +1696,14 @@ const applySettingsBackup = (settings = {}) => {
   replaceReactiveArray(customCategories, settings.customCategories)
   replaceReactiveArray(foldedCategories, settings.foldedCategories)
   replaceReactiveArray(inventoryBuys, settings.inventoryBuys)
+  if (Array.isArray(settings.authorizedDevices)) {
+    authorizedDevices.value = settings.authorizedDevices
+    localStorage.setItem('ciroznaAuthorizedDevices', JSON.stringify(settings.authorizedDevices))
+  }
+  if (typeof settings.adminPasswordHash === 'string' && settings.adminPasswordHash) {
+    adminPasswordHash.value = settings.adminPasswordHash
+    localStorage.setItem('ciroznaAdminPasswordHash', settings.adminPasswordHash)
+  }
   if (Number.isFinite(Number(settings.tablesCount))) {
     const count = Math.max(1, Number(settings.tablesCount))
     tables.value = Array.from({ length: count }, (_, i) => tables.value[i] || { id: i + 1, status: 'prosta', payer: null, selectedTariff: null, elapsedSeconds: 0, currentCost: 0, interval: null })
@@ -1815,15 +1923,16 @@ const importBackupSectionJSON = async (event, section) => {
 }
 
 const toggleUserStatus = async (user) => {
+  if (!adminAuth.value) return alert('Spreminjanje statusa igralca je dovoljeno samo v Admin načinu!')
   const newTip = user.tip === 'član' ? 'nečlan' : 'član'
   const { error } = await supabase.from('users').update({ tip: newTip }).eq('id', user.id)
   if (!error) user.tip = newTip
 }
 const addUser = async () => { 
-  if (!adminAuth.value) return alert('Dodajanje igralcev je dovoljeno samo v Admin načinu!')
-  if(!newUser.value.ime) return; 
-  const { data } = await supabase.from('users').insert([newUser.value]).select()
-  if(data) { users.value = [...users.value, data[0]]; newUser.value.ime = ''; }
+  const ime = normalizedText(newUser.value.ime).trim()
+  if(!ime) return; 
+  const { data } = await supabase.from('users').insert([{ ime, tip: newUser.value.tip }]).select()
+  if(data) { users.value = [...users.value, normalizeUserRow(data[0])]; newUser.value.ime = ''; }
 }
 const deleteUser = async (u) => { 
   if (!adminAuth.value) return alert('Brisanje igralcev je dovoljeno samo v Admin načinu!')

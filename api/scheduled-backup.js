@@ -38,7 +38,7 @@ const toFirestoreFields = (data) => Object.fromEntries(
 )
 
 const fetchCollection = async (collectionName, env) => {
-  const url = `${FIRESTORE_BASE(env.VITE_FIREBASE_PROJECT_ID)}/${collectionName}?key=${env.VITE_FIREBASE_API_KEY}`
+  const url = `${FIRESTORE_BASE(env.VITE_FIREBASE_PROJECT_ID)}/${collectionName}?key=${env.VITE_FIREBASE_API_KEY}&pageSize=1000`
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Firestore ${collectionName}: ${response.status}`)
   const payload = await response.json()
@@ -49,14 +49,29 @@ const fetchCollection = async (collectionName, env) => {
   }))
 }
 
-const patchDocument = async (docName, data, env) => {
-  const url = `https://firestore.googleapis.com/v1/${docName}?key=${env.VITE_FIREBASE_API_KEY}`
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fields: toFirestoreFields(data) })
-  })
-  if (!response.ok) throw new Error(`Firestore patch: ${response.status}`)
+const upsertScheduleDocument = async (scheduleDoc, valueData, env) => {
+  const payload = {
+    key: 'backupSchedule',
+    value: valueData,
+    updated_at: new Date().toISOString()
+  }
+  if (scheduleDoc?._docName) {
+    const url = `https://firestore.googleapis.com/v1/${scheduleDoc._docName}?key=${env.VITE_FIREBASE_API_KEY}`
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: toFirestoreFields({ ...scheduleDoc, ...payload }) })
+    })
+    if (!response.ok) throw new Error(`Firestore patch: ${response.status}`)
+  } else {
+    const url = `${FIRESTORE_BASE(env.VITE_FIREBASE_PROJECT_ID)}/settings?key=${env.VITE_FIREBASE_API_KEY}`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: toFirestoreFields({ id: Date.now(), ...payload }) })
+    })
+    if (!response.ok) throw new Error(`Firestore insert: ${response.status}`)
+  }
 }
 
 const nowParts = (timeZone) => {
@@ -83,13 +98,29 @@ const nowParts = (timeZone) => {
   }
 }
 
-const shouldRun = (schedule, parts) => {
-  if (!schedule?.enabled || !schedule.email) return { run: false, reason: 'disabled' }
+const DEFAULT_SCHEDULE = {
+  enabled: true,
+  email: 'deevyezh@gmail.com',
+  frequency: 'daily',
+  time: '01:00',
+  weekday: 0,
+  dayOfMonth: 1,
+  intervalDays: 7,
+  lastSentKey: '',
+  weeklyEnabled: true,
+  weeklyEmail: 'blaz.kolenc@gmail.com',
+  weeklyWeekday: 0,
+  weeklyTime: '01:00',
+  lastWeeklySentKey: ''
+}
+
+const evaluatePrimaryRule = (schedule, parts) => {
+  if (!schedule?.enabled || !schedule.email) return { run: false, reason: 'primary-disabled' }
 
   let periodKey = ''
   if (schedule.frequency === 'daily') periodKey = `daily:${parts.dateKey}`
   else if (schedule.frequency === 'weekly') {
-    if (parts.weekday !== Number(schedule.weekday ?? 1)) return { run: false, reason: 'wrong-weekday' }
+    if (parts.weekday !== Number(schedule.weekday ?? 0)) return { run: false, reason: 'wrong-weekday' }
     periodKey = `weekly:${parts.dateKey}`
   } else if (schedule.frequency === 'monthly') {
     if (parts.day !== Number(schedule.dayOfMonth ?? 1)) return { run: false, reason: 'wrong-monthday' }
@@ -102,8 +133,17 @@ const shouldRun = (schedule, parts) => {
     periodKey = `custom:${intervalDays}:${parts.dateKey}`
   }
 
-  if (schedule.lastSentKey === periodKey) return { run: false, reason: 'already-sent' }
-  return { run: true, periodKey }
+  if (schedule.lastSentKey === periodKey) return { run: false, reason: 'primary-already-sent' }
+  return { run: true, periodKey, email: schedule.email.trim() }
+}
+
+const evaluateWeeklyRule = (schedule, parts) => {
+  if (!schedule?.weeklyEnabled || !schedule.weeklyEmail) return { run: false, reason: 'weekly-disabled' }
+  const targetWeekday = Number(schedule.weeklyWeekday ?? 0) // 0 = Sunday
+  if (parts.weekday !== targetWeekday) return { run: false, reason: 'not-weekly-day' }
+  const periodKey = `weekly-secondary:${parts.dateKey}`
+  if (schedule.lastWeeklySentKey === periodKey) return { run: false, reason: 'weekly-already-sent' }
+  return { run: true, periodKey, email: schedule.weeklyEmail.trim() }
 }
 
 const sendEmail = async ({ to, subject, text, attachmentName, attachmentJson }, env) => {
@@ -137,46 +177,86 @@ export default async function handler(req, res) {
     const missing = required.filter(key => !process.env[key])
     if (missing.length) return jsonResponse(res, 500, { ok: false, error: `Missing env: ${missing.join(', ')}` })
 
-    const settings = await fetchCollection('settings', process.env)
-    const scheduleDoc = settings.find(item => item.key === 'backupSchedule')
-    const schedule = scheduleDoc?.value
-    const parts = nowParts(process.env.BACKUP_TIMEZONE || 'Europe/Ljubljana')
-    const decision = shouldRun(schedule, parts)
-    if (!decision.run) return jsonResponse(res, 200, { ok: true, skipped: decision.reason })
+    const forceSend = req.query?.force === '1' || req.url?.includes('force=1')
+    const settingsDocs = await fetchCollection('settings', process.env)
+    const scheduleDoc = settingsDocs.find(item => item.key === 'backupSchedule')
+    const appSettingsDoc = settingsDocs.find(item => item.key === 'appSettingsBackup')
+    const schedule = { ...DEFAULT_SCHEDULE, ...(scheduleDoc?.value || {}) }
 
-    const [users, drinks, tariffs, orders, allSettings] = await Promise.all([
+    const parts = nowParts(process.env.BACKUP_TIMEZONE || 'Europe/Ljubljana')
+    const primaryDecision = forceSend
+      ? { run: Boolean(schedule.email), periodKey: `daily:${parts.dateKey}`, email: schedule.email }
+      : evaluatePrimaryRule(schedule, parts)
+    const weeklyDecision = forceSend
+      ? { run: Boolean(schedule.weeklyEnabled && schedule.weeklyEmail), periodKey: `weekly-secondary:${parts.dateKey}`, email: schedule.weeklyEmail }
+      : evaluateWeeklyRule(schedule, parts)
+
+    if (!primaryDecision.run && !weeklyDecision.run) {
+      return jsonResponse(res, 200, {
+        ok: true,
+        skipped: true,
+        primary: primaryDecision.reason,
+        weekly: weeklyDecision.reason
+      })
+    }
+
+    const [users, drinks, tariffs, orders] = await Promise.all([
       fetchCollection('users', process.env),
       fetchCollection('drinks', process.env),
       fetchCollection('tariffs', process.env),
-      fetchCollection('orders', process.env),
-      fetchCollection('settings', process.env)
+      fetchCollection('orders', process.env)
     ])
+
+    const stripMeta = (rows) => rows.map(({ _docName, ...rest }) => rest)
+
+    const structuredSettings = {
+      ...(appSettingsDoc?.value || {}),
+      backupSchedule: schedule,
+      firestoreSettings: stripMeta(settingsDocs)
+    }
 
     const backup = {
       version: 1,
       exported_at: new Date().toISOString(),
-      users,
-      drinks,
-      tariffs,
-      orders,
-      settings: allSettings
+      users: stripMeta(users),
+      drinks: stripMeta(drinks),
+      tariffs: stripMeta(tariffs),
+      orders: stripMeta(orders),
+      settings: structuredSettings
     }
 
-    await sendEmail({
-      to: schedule.email,
-      subject: `Cirozna Omarica backup ${parts.dateKey}`,
-      text: 'V priponki je samodejni backup podatkov.',
-      attachmentName: `cirozna_backup_${parts.dateKey}.json`,
-      attachmentJson: backup
-    }, process.env)
+    const sentTo = []
+    const nextSchedule = { ...schedule }
 
-    await patchDocument(scheduleDoc._docName, {
-      ...scheduleDoc,
-      value: { ...schedule, lastSentKey: decision.periodKey, lastSentAt: new Date().toISOString() },
-      updated_at: new Date().toISOString()
-    }, process.env)
+    if (primaryDecision.run && primaryDecision.email) {
+      await sendEmail({
+        to: primaryDecision.email,
+        subject: `Cirozna Omarica — Dnevni Celotni Backup (${parts.dateKey})`,
+        text: `V priponki je celotna varnostna kopija baze Cirozna Omarica (${parts.dateKey} ob 01:00).\nDatoteko lahko kadarkoli uvoziš v Admin -> Baza -> Uvozi Vse.`,
+        attachmentName: `cirozna_backup_${parts.dateKey}.json`,
+        attachmentJson: backup
+      }, process.env)
+      nextSchedule.lastSentKey = primaryDecision.periodKey
+      nextSchedule.lastSentAt = new Date().toISOString()
+      sentTo.push(primaryDecision.email)
+    }
 
-    return jsonResponse(res, 200, { ok: true, sent: true, to: schedule.email })
+    if (weeklyDecision.run && weeklyDecision.email) {
+      await sendEmail({
+        to: weeklyDecision.email,
+        subject: `Cirozna Omarica — Tedenski Celotni Backup (${parts.dateKey})`,
+        text: `V priponki je tedenska celotna varnostna kopija baze Cirozna Omarica (${parts.dateKey} - Nedelja ob 01:00): igralci, artikli, tarife, zgodovina naročil in nastavitve.\nDatoteko lahko uvoziš v Admin -> Baza -> Uvozi Vse.`,
+        attachmentName: `cirozna_weekly_backup_${parts.dateKey}.json`,
+        attachmentJson: backup
+      }, process.env)
+      nextSchedule.lastWeeklySentKey = weeklyDecision.periodKey
+      nextSchedule.lastWeeklySentAt = new Date().toISOString()
+      sentTo.push(weeklyDecision.email)
+    }
+
+    await upsertScheduleDocument(scheduleDoc, nextSchedule, process.env)
+
+    return jsonResponse(res, 200, { ok: true, sent: true, to: sentTo })
   } catch (error) {
     return jsonResponse(res, 500, { ok: false, error: error.message })
   }
