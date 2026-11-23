@@ -7,123 +7,140 @@
     </div>
     
     <!-- 1. LEFT COLUMN: VICTIMS -->
-    <div class="panel">
-      <h2>Žrtve</h2>
+    <div class="panel panel-left">
+      <div class="panel-header-row">
+        <h2>Žrtve</h2>
+        <span class="count-pill">{{ sortedUsers.length }}</span>
+      </div>
       <div class="search-wrapper">
-        <input v-model="search" type="text" placeholder="🔍 Išči..." class="input-field shadow-input" autocomplete="off" />
+        <span class="search-icon">🔍</span>
+        <input v-model="search" type="text" placeholder="Išči..." class="input-field shadow-input search-input" autocomplete="off" />
       </div>
       
-      <div class="quick-add" style="margin-bottom: 25px;">
+      <div class="quick-add">
         <input v-model="newUser.ime" type="text" placeholder="Ime..." class="input-field" autocomplete="new-password" @keyup.enter="addUser" />
-        <div class="btn-group-row">
-          <button @click="newUser.tip = 'član'" :class="['btn-toggle', { active: newUser.tip === 'član' }]">Član</button>
-          <button @click="newUser.tip = 'nečlan'" :class="['btn-toggle', { active: newUser.tip === 'nečlan' }]">Nečlan</button>
+        <div class="segmented-group">
+          <button @click="newUser.tip = 'član'" :class="['seg-btn', { active: newUser.tip === 'član' }]">Član</button>
+          <button @click="newUser.tip = 'nečlan'" :class="['seg-btn', { active: newUser.tip === 'nečlan' }]">Nečlan</button>
         </div>
         <button @click="addUser" class="btn-add-main">+ Dodaj</button>
       </div>
 
       <div class="list">
         <div v-for="user in sortedUsers" :key="user.id" 
-             :class="['user-item', { 'selected-user': activeUser?.id === user.id }]" 
+             :class="['user-item', { 'selected-user': activeUser?.id === user.id, 'has-debt-user': getUserDebt(user.id) > 0 }]" 
              @click="activeUser = user">
           
-          <div class="user-info">
-<strong>                        <span :class="['user-badge-static', user.tip === 'član' ? 'badge-clan' : 'badge-neclan']">{{ user.tip === 'član' ? 'Č' : 'N' }}</span>
-            {{ user.ime }}</strong>
-            <span v-if="getUserDebt(user.id) !== 0" :class="['user-debt-line', getUserDebt(user.id) > 0 ? 'debt-warning' : 'credit-warning']">{{ getUserDebt(user.id).toFixed(2) }} €</span>
+          <div class="user-row-left">
+            <span :class="['user-badge-static', user.tip === 'član' ? 'badge-clan' : 'badge-neclan']">{{ user.tip === 'član' ? 'Č' : 'N' }}</span>
+            <strong class="user-name-text">{{ user.ime }}</strong>
           </div>
 
-          <div v-if="adminAuth" class="user-actions">
-            <button @click.stop="editUser(user)" class="btn-icon">✎</button>
-            <!-- <button @click.stop="deleteUser(user)" class="btn-icon btn-del-red">✖</button> -->
+          <div class="user-row-right">
+            <span v-if="getUserDebt(user.id) !== 0" :class="['user-debt-pill', getUserDebt(user.id) > 0 ? 'debt-pill-pos' : 'debt-pill-neg']">{{ getUserDebt(user.id).toFixed(2) }} €</span>
+            <div v-if="adminAuth" class="user-actions">
+              <button @click.stop="editUser(user)" class="btn-icon" title="Preimenuj">✎</button>
+            </div>
           </div>
         </div>
       </div>
-      <div :class="['admin-mode-switch', { unlocked: adminAuth }]">
+      <div v-if="adminAuth" :class="['admin-mode-switch', { unlocked: adminAuth }]">
         <div class="mode-status">
           <span class="mode-dot"></span>
-          {{ adminAuth ? 'Admin način aktiven' : 'Navadni način' }}
+          Admin način aktiven
         </div>
-        <button v-if="!adminAuth" class="btn-mode-main btn-to-admin" @click="showAdmin = true" title="Preklopi v admin način">
-          To admin
-        </button>
-        <button v-else class="btn-mode-main btn-to-user" @click="lockAdmin" title="Zakleni admin in vrni navadni način">
-          To user
-        </button>
-        <button v-if="adminAuth" class="btn-admin-main" @click="showAdmin = true">
-          Admin Panel
+        <button class="btn-mode-main btn-to-user" @click="lockAdmin" title="Zakleni admin in vrni navadni način">
+          Zakleni Admin (To user)
         </button>
       </div>
     </div>
 
     <!-- 2. MIDDLE COLUMN: CIROZNA OMARICA -->
-    <div class="panel">
-      <h2>Cirozna Omarica</h2>
-      <div v-for="cat in uniqueCategories" :key="cat" class="cat-section">
+    <div ref="middlePanelRef" class="panel panel-middle">
+      <div class="panel-header-row">
+        <h2>Cirozna Omarica</h2>
+        <div v-if="activeUser" class="active-account-tag">
+          Račun: <strong>{{ activeUser.ime }}</strong>
+        </div>
+      </div>
+      <div v-for="cat in uniqueCategories" :key="cat" :class="['cat-section', getCatThemeClass(cat)]">
         <div class="cat-title-box">
           <h3>{{ cat }}</h3>
         </div>
         <div class="drink-grid" :style="gridStyleConfig">
           <button v-for="d in sortedDrinks.filter(d => d.kategorija === cat)" :key="d.id" 
                   @click="addDrink(d)" 
-                  class="btn-drink" 
-                  :style="{ backgroundColor: ui.useCatColors ? getCatColor(cat) : ui.btnBgColor }">
+                  :class="['btn-drink', getCatThemeClass(cat)]" 
+                  :style="!ui.useCatColors ? { backgroundColor: ui.btnBgColor } : {}">
             <span class="drink-name">{{ d.ime }}</span>
             <div v-if="!isSpecialTariff" class="drink-price-area">
-              <strong>{{ d.cena.toFixed(2) }} €</strong>
+              <span class="drink-price-pill">{{ d.cena.toFixed(2) }} €</span>
               <div v-if="d.cena_clan > 0 && d.cena_clan !== d.cena" class="member-price-tag">Č: {{ d.cena_clan.toFixed(2) }} €</div>
             </div>
             <div v-else class="drink-price-area">
-              <strong class="special-price">{{ (d.cena * (1 + (specialTariffModifier / 100))).toFixed(2) }} €</strong>
+              <span class="drink-price-pill special-price">{{ (d.cena * (1 + (specialTariffModifier / 100))).toFixed(2) }} €</span>
             </div>
           </button>
         </div>
       </div>
+      <button class="middle-scroll-fab" @click="scrollMiddlePanel" title="Pomakni nižje">↓</button>
     </div>
 
     <!-- 3. RIGHT COLUMN: TABLES & ORDERS -->
-    <div class="panel">
-      <div class="header-flex">
+    <div class="panel panel-right">
+      <div class="panel-header-row">
         <h2>Mize & Račun</h2>
-        <button @click="isSpecialTariff = !isSpecialTariff" :class="['btn-tariff-mode', { 'active-discount': isSpecialTariff }]">
-          {{ isSpecialTariff ? 'Globalni % Popust/Podražitev (Aktiven)' : 'Standardni cenik (Člani / Nečlani)' }}
-        </button>
+        <div class="header-admin-actions">
+          <button class="btn-header-admin" :class="{ 'admin-unlocked': adminAuth }" @click="showAdmin = true" title="Odpri Admin">
+            ⚙️ {{ adminAuth ? 'Admin' : 'Admin' }}
+          </button>
+          <button v-if="adminAuth" class="btn-header-lock" @click="lockAdmin" title="Zakleni Admin način">🔒</button>
+        </div>
       </div>
 
-      <div v-if="activeUser" class="tab-section tab-section-top">
-        <div class="tab-title-row">
-          <h3><span class="tab-label">Zapitek:</span> <span class="tab-user-name">{{ activeUser.ime }}</span></h3>
-          <button v-if="canManageTab" @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
-            {{ showCustomCharge ? '−' : '+' }}
-          </button>
-          <button v-if="canManageTab" @click="lockAdmin" class="btn-admin-lock" title="Zakleni admin in vrni navadni način">Zakleni</button>
+      <button @click="isSpecialTariff = !isSpecialTariff" :class="['btn-tariff-mode', { 'active-discount': isSpecialTariff }]">
+        <span class="tariff-dot"></span>
+        {{ isSpecialTariff ? 'Globalni % Popust/Podražitev (Aktiven)' : 'Standardni cenik (Člani / Nečlani)' }}
+      </button>
+
+      <div v-if="activeUser" class="tab-card">
+        <div class="tab-card-header">
+          <div class="tab-user-meta">
+            <strong class="tab-card-username">{{ activeUser.ime }}</strong>
+            <span :class="['tab-role-badge', activeUser.tip === 'član' ? 'role-clan' : 'role-neclan']">
+              {{ activeUser.tip === 'član' ? 'Član' : 'Nečlan' }}
+            </span>
+            <button v-if="canManageTab" @click="showCustomCharge = !showCustomCharge" :class="['btn-qty', 'custom-charge-toggle', { active: showCustomCharge }]" title="Dodaj ročni artikel ali dobitek">
+              {{ showCustomCharge ? '−' : '+' }}
+            </button>
+          </div>
+          <div class="tab-card-total">{{ userTotalTab.toFixed(2) }} €</div>
         </div>
+
         <div v-if="canManageTab && showCustomCharge" class="custom-charge-row">
           <input v-model="customCharge.ime" type="text" class="input-inline custom-charge-name" placeholder="Dodaj storitev / artikel..." @keyup.enter="addCustomCharge">
           <input v-model.number="customCharge.cena" type="number" step="0.01" class="input-inline custom-charge-price" placeholder="€" @keyup.enter="addCustomCharge">
           <button @click="addCustomCharge" class="btn-start btn-small">+ Dodaj</button>
         </div>
-        <div class="order-list">
+
+        <div v-if="groupedCurrentOrders.length > 0" class="order-list">
           <div v-for="group in groupedCurrentOrders" :key="group.key" class="order-row">
             <div class="order-main">
               <button @click="toggleOrderName(group.key)" :title="group.ime" :class="['order-name', { expanded: expandedOrderNames.includes(group.key) }]">{{ group.ime }}</button>
-              <span class="order-meta">{{ group.quantity }} × {{ group.cena.toFixed(2) }} €</span>
             </div>
-            <div class="order-controls">
-              <span class="order-total">{{ group.total.toFixed(2) }} €</span>
-              <template v-if="group.isDrink">
-                <button @click="addOrderGroupItem(group)" class="btn-qty btn-qty-plus" title="Dodaj še eno in odštej iz zaloge">+</button>
-                <span class="order-qty">{{ group.quantity }}</span>
-                <button v-if="canManageTab" @click="removeOrderGroupItem(group)" class="btn-qty btn-qty-minus" title="Odštej eno in vrni v zalogo">−</button>
-              </template>
-              <button v-if="canManageTab" @click="removeOrderGroup(group)" class="btn-del-mini" title="Odstrani vrstico in vrni zalogo">✖</button>
+            <div class="order-stepper-box">
+              <button v-if="canManageTab && group.isDrink" @click="removeOrderGroupItem(group)" class="stepper-btn" title="Odštej eno in vrni v zalogo">−</button>
+              <span class="stepper-qty">{{ group.quantity }}</span>
+              <button v-if="group.isDrink" @click="addOrderGroupItem(group)" class="stepper-btn" title="Dodaj še eno in odštej iz zaloge">+</button>
+              <button v-if="canManageTab" @click="removeOrderGroup(group)" class="btn-del-mini" style="margin-left: 4px;" title="Odstrani vrstico in vrni zalogo">✖</button>
             </div>
           </div>
         </div>
+        <div v-else class="empty-tab-items">Ni odprtih postavk na računu.</div>
         
         <div v-if="userCurrentOrders.length > 0" class="tab-actions">
-          <button v-if="canManageTab" @click="clearTab" class="btn-stop" style="flex: 1;" title="Izbriše vse in vrne artikle v omarico">Pobriši Vse</button>
-          <button v-if="canPayTab" @click="payTab" class="btn-pay" style="flex: 2; margin-top:0;">{{ userTotalTab >= 0 ? 'Plačaj' : 'Zaključi' }} ({{ userTotalTab.toFixed(2) }} €)</button>
+          <button v-if="canManageTab" @click="clearTab" class="btn-stop" style="flex: 0 0 auto; width: auto; padding: 12px 14px;" title="Izbriše vse in vrne artikle v omarico">Pobriši</button>
+          <button v-if="canPayTab" @click="payTab" class="btn-pay" style="flex: 1; margin-top:0;">Poravnaj račun ({{ userTotalTab.toFixed(2) }} €)</button>
           <div v-else class="device-locked-pay-notice" title="Ta naprava ni pooblaščena kot blagajna">
             🔒 Plačilo možno samo na klubskem tabletu (ali v Admin načinu)
           </div>
@@ -131,38 +148,38 @@
       </div>
       <div v-else class="empty-state empty-state-compact">Izberi žrtev za prikaz računa.</div>
       
-      <div v-for="t in tables" :key="t.id" class="table-card">
+      <div v-for="t in tables" :key="t.id" :class="['table-card', { 'table-card-active': t.status !== 'prosta' }]">
         <div class="table-header">
           <h3>Miza {{ t.id }}</h3>
-          <span v-if="t.status !== 'prosta'" :class="['badge', t.status === 'pavza' ? 'badge-warn' : 'badge-active']">{{ t.status }}</span>
+          <span v-if="t.status !== 'prosta'" :class="['table-status-pill', t.status === 'pavza' ? 'status-paused' : 'status-active']">
+            <span class="status-dot"></span>
+            {{ t.status === 'pavza' ? 'Pavza' : 'Aktivna' }} • {{ formatTableTimer(t.elapsedSeconds) }}
+          </span>
         </div>
         
-        <div v-if="t.status === 'prosta'">
-          <select v-model="t.selectedTariff" class="select-field" v-if="!isSpecialTariff || !flatRateActive">
+        <div v-if="!isSpecialTariff || !flatRateActive">
+          <select v-model="t.selectedTariff" class="select-field" :disabled="t.status !== 'prosta'">
             <option :value="null" disabled>-- Izberi tarifo --</option>
             <option v-for="tar in currentTariffs" :key="tar.id" :value="tar">{{ tar.kombinacija }} ({{ tar.cena_na_uro }}€/h)</option>
           </select>
-          <div v-else class="flat-rate-notice">Velja enotna tarifa: {{ flatRateValue.toFixed(2) }}€/h</div>
-          
-          <select v-model="t.payer" class="select-field mt-half">
-            <option :value="null" disabled>-- Nosilec plačila --</option>
-            <option v-for="u in alphabeticalUsers" :key="u.id" :value="u">{{ u.ime }}</option>
-          </select>
+        </div>
+        <div v-else class="flat-rate-notice">Velja enotna tarifa: {{ flatRateValue.toFixed(2) }}€/h</div>
+        
+        <select v-model="t.payer" class="select-field mt-half" :disabled="t.status !== 'prosta'">
+          <option :value="null" disabled>-- Nosilec plačila --</option>
+          <option v-for="u in alphabeticalUsers" :key="u.id" :value="u">{{ u.ime }} ({{ u.tip === 'član' ? 'Č' : 'N' }})</option>
+        </select>
+
+        <div v-if="t.status === 'prosta'">
           <button @click="startTable(t)" class="btn-start mt-half">Začni igro</button>
         </div>
-        
-        <div v-else class="timer-section">
-          <div class="active-table-meta">
-            <span>{{ (isSpecialTariff && flatRateActive) ? 'Enotna: ' + flatRateValue.toFixed(2) : (t.selectedTariff?.kombinacija + ' (' + t.selectedTariff?.cena_na_uro.toFixed(2) + ')') }} €/h</span>
-            <strong>Nosilec: {{ t.lockedPayer?.ime || t.payer?.ime || 'Neznan' }}</strong>
-          </div>
-
-          <div class="timer">{{ formatTime(t.elapsedSeconds) }}</div>
-          <div class="current-cost">{{ t.currentCost.toFixed(2) }} €</div>
-          <div class="table-controls">
-            <button @click="t.status === 'zasedena' ? pauseTable(t) : resumeTable(t)" class="btn-warn">{{ t.status === 'zasedena' ? '⏸' : '▶' }}</button>
-            <button @click="stopTable(t)" class="btn-stop">⏹ Zaključi</button>
-          </div>
+        <div v-else class="table-active-actions mt-half">
+          <button @click="stopTable(t)" class="btn-end-game">
+            Zaključi igro {{ t.currentCost > 0 ? `(${t.currentCost.toFixed(2)} €)` : '' }}
+          </button>
+          <button @click="t.status === 'zasedena' ? pauseTable(t) : resumeTable(t)" class="btn-pause-mini" :title="t.status === 'zasedena' ? 'Pavza' : 'Nadaljuj'">
+            {{ t.status === 'zasedena' ? '⏸' : '▶' }}
+          </button>
         </div>
       </div>
     </div>
@@ -1238,8 +1255,22 @@ const gridStyleConfig = computed(() => {
   return { gridTemplateColumns: `repeat(${ui.buttonsPerRow}, minmax(0, 1fr))` }
 })
 
-const catColors = ['#2c3e50', '#4a2333', '#234a31', '#4a4023', '#23394a', '#3f234a']
+const catColors = ['#112534', '#311521', '#152c21', '#2f2715', '#152531', '#271531']
 const getCatColor = (catName) => { const index = uniqueCategories.value.indexOf(catName); return catColors[index % catColors.length]; }
+const getCatThemeClass = (catName) => {
+  const lower = normalizedText(catName).toLowerCase()
+  if (lower.includes('brezalkohol') || lower.includes('voda') || lower.includes('sok') || lower.includes('kava')) return 'cat-theme-blue'
+  if (lower.includes('alkohol') || lower.includes('pivo') || lower.includes('žgan') || lower.includes('vino')) return 'cat-theme-wine'
+  const index = uniqueCategories.value.indexOf(catName)
+  return index % 2 === 0 ? 'cat-theme-blue' : 'cat-theme-wine'
+}
+const middlePanelRef = ref(null)
+const scrollMiddlePanel = () => {
+  if (!middlePanelRef.value) return
+  const el = middlePanelRef.value
+  const isNearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40
+  el.scrollTo({ top: isNearBottom ? 0 : el.scrollTop + 260, behavior: 'smooth' })
+}
 
 // Robust Category Sorting via LocalStorage
 const catOrder = reactive(JSON.parse(localStorage.getItem('ciroznaCatOrder')) || [])
@@ -2566,6 +2597,11 @@ const addTable = () => { tables.value.push({ id: tables.value.length + 1, status
 const removeTable = () => { if(tables.value.length > 1) tables.value.pop() }
 const updateTariffDB = async (tar) => { await supabase.from('tariffs').update({ cena_na_uro: tar.cena_na_uro }).eq('id', tar.id) }
 const formatTime = (s) => [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(v => String(v).padStart(2, '0')).join(':')
+const formatTableTimer = (s) => {
+  const mins = Math.floor(s / 60)
+  const secs = s % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
 
 const clearAdminInputs = () => { passInput.value = ''; newAdminPassword.value = ''; newAdminPasswordRepeat.value = ''; resetEmail.value = ''; showPasswordReset.value = false }
 const closeAdmin = () => { showAdmin.value = false; clearAdminInputs() }
@@ -2636,130 +2672,159 @@ const resetAdminPassword = async () => {
 }
 
 /* THEME VARIABLAS */
-.kiosk-container.dark { --bg-color: #121212; --panel-bg: #1e1e24; --text-color: #eaeaea; --border-color: #333333; --input-bg: #2a2a35; --item-bg: #25252d; }
-.kiosk-container.light { --bg-color: #e0e0e0; --panel-bg: #ffffff; --text-color: #222222; --border-color: #cccccc; --input-bg: #f5f5f5; --item-bg: #f9f9f9; }
+.kiosk-container.dark {
+  --bg-color: #0b0d10;
+  --panel-bg: #111419;
+  --text-color: #eef2f7;
+  --muted-text: #8b95a5;
+  --border-color: #202630;
+  --input-bg: #0c0f13;
+  --item-bg: #161a21;
+  --emerald: #10b981;
+  --emerald-bright: #34d399;
+}
+.kiosk-container.light {
+  --bg-color: #e5e9ef;
+  --panel-bg: #ffffff;
+  --text-color: #161b22;
+  --muted-text: #656d76;
+  --border-color: #d0d7de;
+  --input-bg: #f6f8fa;
+  --item-bg: #f3f5f8;
+  --emerald: #10b981;
+  --emerald-bright: #059669;
+}
 
 /* GLOBAL & LAYOUT */
-.kiosk-container { display: grid; grid-template-columns: minmax(190px, var(--left-col)) minmax(320px, var(--middle-col)) minmax(290px, var(--right-col)); min-width: var(--min-app-width); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 15px; gap: 15px; font-family: sans-serif; box-sizing: border-box; height: 100dvh; overflow: hidden; }
-.db-error-banner { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 10px; max-width: min(920px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 8px; background: #3b1f1f; border: 1px solid #ff5252; color: #fff; box-shadow: 0 12px 28px rgba(0,0,0,0.35); font-size: 13px; }
+.kiosk-container { display: grid; grid-template-columns: minmax(210px, var(--left-col)) minmax(340px, var(--middle-col)) minmax(310px, var(--right-col)); min-width: var(--min-app-width); height: 100vh; background: var(--bg-color); color: var(--text-color); padding: 12px; gap: 12px; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; height: 100dvh; overflow: hidden; }
+.db-error-banner { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 10px; max-width: min(920px, calc(100vw - 24px)); padding: 10px 12px; border-radius: 10px; background: #3b1f1f; border: 1px solid #ff5252; color: #fff; box-shadow: 0 12px 28px rgba(0,0,0,0.35); font-size: 13px; }
 .db-error-banner span { color: #ffd6d6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .db-error-banner button { border: none; border-radius: 6px; padding: 7px 10px; background: #ff5252; color: white; font-weight: 800; cursor: pointer; white-space: nowrap; }
 .db-error-banner button:disabled { opacity: 0.6; cursor: wait; }
-.panel { background: var(--panel-bg); padding: 20px; border-radius: 12px; overflow-y: auto; border: 1px solid var(--border-color); overflow-y: auto; padding-bottom: 120px !important; }
+.panel { position: relative; background: var(--panel-bg); padding: 14px; border-radius: 14px; overflow-y: auto; border: 1px solid var(--border-color); padding-bottom: 90px !important; box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
 
 h2, h3, h4 { color: var(--text-color); margin-top: 0; }
-h2 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; margin-bottom: 15px; text-align: center; }
-.header-flex { display: flex; flex-direction: column; gap: 10px; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; margin-bottom: 15px; }
-.header-flex h2 { border: none; padding: 0; margin: 0; }
+.panel-header-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 14px; }
+.panel-header-row h2 { border: none; padding: 0; margin: 0; text-align: left; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.count-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 24px; padding: 0 8px; border-radius: 8px; background: #1c222b; border: 1px solid #2b3340; color: var(--muted-text); font-size: 12px; font-weight: 700; }
+.active-account-tag { font-size: 13px; color: var(--muted-text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.active-account-tag strong { color: var(--emerald-bright); font-weight: 700; }
+.header-admin-actions { display: inline-flex; align-items: center; gap: 6px; }
+.btn-header-admin { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 9px; background: #171c23; border: 1px solid #2a323f; color: var(--text-color); font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-header-admin.admin-unlocked { background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.6); color: var(--emerald-bright); }
+.btn-header-lock { padding: 6px 9px; border-radius: 9px; background: rgba(239, 68, 68, 0.16); border: 1px solid rgba(239, 68, 68, 0.45); color: #fca5a5; cursor: pointer; font-size: 13px; }
 
 /* INPUTS & BUTTONS */
-.input-field { width: 100%; padding: 12px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; margin-bottom: 10px; font-size: 14px; }
-.shadow-input { box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+.input-field { width: 100%; padding: 10px 12px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 10px; box-sizing: border-box; margin-bottom: 10px; font-size: 14px; outline: none; }
+.input-field:focus { border-color: #2f3b4c; }
+.shadow-input { box-shadow: inset 0 2px 6px rgba(0,0,0,0.28); }
 .secret-input { -webkit-text-security: disc; } 
-.search-wrapper { margin-bottom: 15px; }
+.search-wrapper { position: relative; margin-bottom: 12px; }
+.search-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.55; pointer-events: none; }
+.search-input { padding-left: 34px; margin-bottom: 0; }
+.quick-add { background: #14181f; border: 1px solid var(--border-color); border-radius: 12px; padding: 10px; margin-bottom: 16px; }
+.segmented-group { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #0c0f13; border: 1px solid var(--border-color); border-radius: 9px; padding: 3px; margin-bottom: 10px; }
+.seg-btn { padding: 7px 8px; background: transparent; color: var(--muted-text); border: 1px solid transparent; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.seg-btn.active { background: #232934; border-color: #364152; color: var(--text-color); }
 .btn-group-row { display: flex; gap: 8px; margin-bottom: 10px; }
-.btn-toggle { flex: 1; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; border-radius: 6px; font-weight: bold; }
-.btn-toggle.active { background: #4caf50; border-color: #4caf50; color: white;}
-.btn-add-main { width: 100%; padding: 12px; background: #2e7d32; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 15px; }
-.admin-mode-switch { margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 8px; padding: 8px; border: 1px solid rgba(120,120,130,0.38); border-radius: 8px; background: rgba(255,255,255,0.035); }
-.admin-mode-switch.unlocked { border-color: rgba(76,175,80,0.65); background: rgba(76,175,80,0.13); }
-.mode-status { display: flex; align-items: center; justify-content: center; gap: 7px; color: #aaa; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 0; }
-.mode-dot { width: 9px; height: 9px; border-radius: 999px; background: #8a8a8a; box-shadow: 0 0 0 3px rgba(138,138,138,0.14); }
-.admin-mode-switch.unlocked .mode-status { color: #7ee787; }
-.admin-mode-switch.unlocked .mode-dot { background: #4caf50; box-shadow: 0 0 0 3px rgba(76,175,80,0.18); }
-.btn-mode-main, .btn-admin-main { width: 100%; border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: 900; }
-.btn-mode-main { padding: 13px; font-size: 15px; }
+.btn-toggle { flex: 1; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); cursor: pointer; border-radius: 8px; font-weight: bold; }
+.btn-toggle.active { background: #10b981; border-color: #10b981; color: white;}
+.btn-add-main { width: 100%; padding: 10px 12px; background: #14b87a; border: none; color: #ffffff; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; }
+.admin-mode-switch { margin-top: 16px; display: grid; grid-template-columns: 1fr; gap: 8px; padding: 8px; border: 1px solid rgba(16,185,129,0.45); border-radius: 10px; background: rgba(16,185,129,0.09); }
+.mode-status { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--emerald-bright); font-size: 11px; font-weight: 800; text-transform: uppercase; }
+.mode-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--emerald); }
+.btn-mode-main, .btn-admin-main { width: 100%; border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: 800; }
+.btn-mode-main { padding: 10px; font-size: 13px; }
 .btn-to-admin { background: #1976d2; }
-.btn-to-user { background: #c62828; }
-.btn-admin-main { padding: 11px; background: #455a64; font-size: 13px; }
-.btn-tariff-mode { padding: 12px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.3s; width: 100%;}
-.active-discount { background: #d32f2f; border-color: #ff5252; color: white;}
+.btn-to-user { background: #b91c1c; }
+.btn-admin-main { padding: 10px; background: #334155; font-size: 13px; }
+.btn-tariff-mode { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; margin-bottom: 14px; background: #161b22; color: var(--text-color); border: 1px solid var(--border-color); border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13px; width: 100%; }
+.tariff-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--emerald-bright); flex-shrink: 0; }
+.active-discount { background: rgba(185, 28, 28, 0.25); border-color: #ef4444; color: #fecaca; }
+.active-discount .tariff-dot { background: #f87171; }
 
 /* RE-ALIGNED PLAYERS (VICTIMS) */
-.user-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 9px; background: var(--item-bg); border-radius: 8px; margin-bottom: 5px; cursor: pointer; border: 1px solid transparent; gap: 7px; }
-.is-member { border-left: 6px solid #2980b9; }
-.is-guest { border-left: 6px solid #888; }
-.selected-user { background: #354a35 !important; border-color: #4caf50; color: white;}
-.user-info { text-align: left; flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.user-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; font-size: var(--victim-fz); font-weight: var(--victim-fw); }
-
-.user-actions { display: flex; align-items: center; gap: 5px; flex-shrink: 0; justify-content: flex-end; }
-.debt-warning { color: #ff5252; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
-.credit-warning { color: #4caf50; font-weight: bold; font-size: 12px; white-space: nowrap; margin-right: 3px; }
-.user-debt-line { display: block; margin: 0; padding-left: 22px; line-height: 1.1; }
-.user-badge-static { font-size: 10px; color: white; padding: 1px 4px; border-radius: 3px; font-weight: bold; width: 12px; text-align: center;}
-.badge-clan { background: #2980b9; }
-.badge-neclan { background: #555; }
-.btn-icon { background: var(--border-color); border: none; color: var(--text-color); padding: 5px 7px; cursor: pointer; border-radius: 4px; }
-.btn-del-red { background: #c62828; color: white;}
+.user-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 10px; background: #151920; border-radius: 11px; margin-bottom: 7px; cursor: pointer; border: 1px solid #222934; gap: 8px; }
+.selected-user { background: rgba(16, 185, 129, 0.14) !important; border-color: rgba(16, 185, 129, 0.72) !important; color: white; }
+.user-row-left { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1 1 auto; }
+.user-name-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: var(--victim-fz); font-weight: var(--victim-fw); color: var(--text-color); }
+.user-row-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.user-debt-pill { font-size: 12px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 3px 8px; border-radius: 7px; white-space: nowrap; }
+.debt-pill-pos { background: rgba(16, 185, 129, 0.16); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; }
+.debt-pill-neg { background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.35); color: #38bdf8; }
+.user-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.user-badge-static { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+.badge-clan { background: rgba(14, 165, 233, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; }
+.badge-neclan { background: rgba(217, 119, 6, 0.2); border: 1px solid rgba(245, 158, 11, 0.45); color: #f59e0b; }
+.btn-icon { background: #222934; border: 1px solid #303949; color: var(--text-color); padding: 4px 7px; cursor: pointer; border-radius: 6px; font-size: 12px; }
+.btn-del-red { background: #b91c1c; color: white; border: none; }
 
 /* DRINKS & CATEGORIES */
-.cat-section { width: 100%; margin-bottom: 25px; }
-.cat-title-box { background: var(--input-bg); padding: 8px 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; border: 1px solid var(--border-color); }
-.cat-title-box h3 { margin: 0; text-transform: uppercase; font-weight: bold; }
+.cat-section { width: 100%; margin-bottom: 18px; }
+.cat-title-box { background: #14181f; padding: 9px 14px; border-radius: 10px; text-align: center; margin-bottom: 12px; border: 1px solid var(--border-color); }
+.cat-title-box h3 { margin: 0; text-transform: uppercase; font-weight: 700; font-size: 12px; letter-spacing: 0.12em; color: #7dd3fc; }
+.cat-theme-wine .cat-title-box h3 { color: #fda4af; }
 .drink-grid { display: grid; width: 100%; gap: 10px; justify-content: stretch; align-items: stretch; }
-.btn-drink { width: var(--drink-w); min-width: 0; min-height: var(--drink-h); height: auto; font-size: var(--drink-fz); color: var(--drink-fc); padding: 10px 8px; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden;}
-.btn-drink:active { transform: scale(0.97); }
-.drink-name { width: 100%; margin-bottom: 5px; font-size: var(--drink-name-fz); font-weight: var(--drink-name-fw); line-height: 1.12; overflow-wrap: anywhere; word-break: normal; hyphens: auto;}
-.drink-price-area { display: flex; flex-direction: column; align-items: center; max-width: 100%; font-size: var(--drink-price-fz); line-height: 1.15; overflow-wrap: anywhere; }
-.special-price { color: #ff9800; font-size: 1.1em;} 
-.member-price-tag { font-size: 0.8em; opacity: 0.8; margin-top: 3px; font-weight: normal; }
+.btn-drink { width: var(--drink-w); min-width: 0; min-height: 86px; height: auto; font-size: var(--drink-fz); color: var(--drink-fc); padding: 12px 10px; border: 1px solid #1f3d52; background: linear-gradient(180deg, #132534 0%, #0f1d29 100%); cursor: pointer; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.22); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px; overflow: hidden; }
+.btn-drink.cat-theme-wine { background: linear-gradient(180deg, #331621 0%, #261019 100%); border-color: #5a2437; }
+.btn-drink:active { transform: scale(0.98); }
+.drink-name { width: 100%; margin: 0; font-size: var(--drink-name-fz); font-weight: var(--drink-name-fw); line-height: 1.15; overflow-wrap: anywhere; color: #f1f5f9; }
+.drink-price-area { display: flex; flex-direction: column; align-items: center; max-width: 100%; font-size: var(--drink-price-fz); line-height: 1.15; }
+.drink-price-pill { display: inline-flex; align-items: center; justify-content: center; padding: 3px 10px; border-radius: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; font-size: 13px; background: rgba(14, 165, 233, 0.18); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc; }
+.cat-theme-wine .drink-price-pill { background: rgba(244, 63, 94, 0.18); border-color: rgba(251, 113, 133, 0.35); color: #fda4af; }
+.special-price { color: #fbbf24 !important; border-color: rgba(251, 191, 36, 0.45) !important; background: rgba(245, 158, 11, 0.18) !important; } 
+.member-price-tag { font-size: 11px; opacity: 0.78; margin-top: 3px; font-weight: 600; color: #cbd5e1; }
+.middle-scroll-fab { position: sticky; bottom: 10px; left: calc(50% - 20px); margin-top: 8px; width: 40px; height: 40px; border-radius: 999px; background: rgba(24, 29, 38, 0.92); border: 1px solid #303949; color: #cbd5e1; font-size: 18px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px rgba(0,0,0,0.45); }
 
-/* TABLES */
-.table-card { background: var(--item-bg); padding: 12px 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border-color); }
-.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.table-header h3 { margin: 0; }
-.flat-rate-notice { background: #4a2333; color: white; padding: 10px; border-radius: 6px; text-align: center; font-size: 14px; font-weight: bold; }
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-.badge-active { background: #f57c00; color: white; }
-.badge-warn { background: #fbc02d; color: black; }
-.select-field { width: 100%; padding: 10px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; }
-.mt-half { margin-top: 8px; }
-.timer-section { text-align: center; }
-.active-table-meta { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; color: #888; font-size: 12px; margin: 0 0 3px; line-height: 1.2; }
-.active-table-meta strong { color: var(--text-color); font-weight: 800; }
-.timer { font-size: 29px; font-family: monospace; font-weight: bold; color: #4caf50; margin: 0; line-height: 1.02; }
-.current-cost { font-size: 16px; font-weight: bold; margin-bottom: 7px; line-height: 1.1; }
-.table-controls { display: flex; gap: 10px; }
-.table-controls .btn-warn,
-.table-controls .btn-stop { padding: 10px; }
-.btn-start { background: #2e7d32; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
-.btn-stop { background: #c62828; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
-.btn-warn { background: #f57c00; color: white; border: none; padding: 12px; width: 100%; cursor: pointer; border-radius: 6px; font-weight: bold; }
-
-/* TAB (ZAPITEK) */
-.tab-section { margin-top: 25px; padding-top: 15px; border-top: 2px solid var(--border-color); }
-.tab-section-top { margin-top: 0; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 2px solid var(--border-color); }
-.tab-title-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-.tab-title-row h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
-.tab-label { color: var(--text-color); font-weight: 800; }
-.tab-user-name { display: inline-flex; align-items: center; max-width: 170px; padding: 4px 10px; border-radius: 999px; background: rgba(76,175,80,0.18); border: 1px solid rgba(76,175,80,0.55); color: #7ee787; font-weight: 900; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.btn-admin-lock { height: 30px; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 0 10px; background: #455a64; color: white; cursor: pointer; font-size: 12px; font-weight: 800; }
-.btn-admin-lock:hover { background: #c62828; }
-.custom-charge-toggle { background: #2e7d32; }
-.custom-charge-toggle.active { background: #c62828; }
-.custom-charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 86px; gap: 6px; align-items: center; margin-bottom: 12px; background: rgba(0,0,0,0.12); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; }
+/* TAB CARD (ZAPITEK) */
+.tab-card { background: #14181f; border: 1px solid var(--border-color); border-radius: 13px; padding: 14px; margin-bottom: 14px; }
+.tab-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #1e242e; }
+.tab-user-meta { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.tab-card-username { font-size: 15px; font-weight: 700; color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 145px; }
+.tab-role-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+.role-clan { background: rgba(14, 165, 233, 0.18); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; }
+.role-neclan { background: rgba(217, 119, 6, 0.2); border: 1px solid rgba(245, 158, 11, 0.45); color: #f59e0b; }
+.tab-card-total { font-size: 20px; font-weight: 800; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--emerald-bright); white-space: nowrap; }
+.custom-charge-toggle { background: #14b87a; width: 24px; height: 24px; font-size: 14px; }
+.custom-charge-toggle.active { background: #b91c1c; }
+.custom-charge-row { display: grid; grid-template-columns: minmax(0, 1fr) 72px 76px; gap: 6px; align-items: center; margin-bottom: 10px; background: #0e1117; border: 1px solid var(--border-color); border-radius: 9px; padding: 8px; }
 .custom-charge-name, .custom-charge-price { width: 100%; box-sizing: border-box; }
 .custom-charge-price { text-align: right; }
-.order-list { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
-.order-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 3px; border-bottom: 1px solid var(--border-color); }
+.order-list { max-height: 240px; overflow-y: auto; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.order-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: #1a2029; border: 1px solid #242c38; border-radius: 9px; }
 .order-main { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
-.order-name { width: 100%; border: none; background: transparent; color: var(--text-color); padding: 0; margin: 0; font: inherit; font-weight: bold; font-size: 15px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: pointer; }
-.order-name:hover,
+.order-name { width: 100%; border: none; background: transparent; color: #e2e8f0; padding: 0; margin: 0; font: inherit; font-weight: 600; font-size: 14px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; cursor: pointer; }
 .order-name.expanded { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-.order-meta { color: #888; font-size: 11px; line-height: 1.2; white-space: nowrap; }
-.order-controls { display: grid; grid-template-columns: 70px 28px 16px 28px 30px; align-items: center; justify-content: end; column-gap: 6px; row-gap: 4px; flex: 0 0 auto; }
-.order-total { font-weight: 500; font-size: 13px; white-space: nowrap; text-align: right; }
-.order-qty { min-width: 0; text-align: center; font-size: 15px; font-weight: bold; }
-.btn-qty { width: 28px; height: 30px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 17px; font-weight: bold; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
-.btn-qty-minus { background: #c62828; }
-.btn-qty-plus { background: #2e7d32; }
-.btn-del-mini { background: #c62828; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-.order-controls .btn-del-mini { grid-column: 5; }
-.tab-actions { display: flex; gap: 10px; align-items: stretch; }
-.btn-pay { background: #1976d2; color: white; border: none; padding: 15px; cursor: pointer; border-radius: 6px; font-weight: bold; font-size: 16px; }
-.device-locked-pay-notice { flex: 2; padding: 12px 10px; border-radius: 6px; background: rgba(198, 40, 40, 0.16); border: 1px dashed rgba(255, 82, 82, 0.55); color: #ff8a80; font-size: 12px; font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; }
-.empty-state { text-align: center; padding: 30px; color: #888; font-style: italic; }
+.order-stepper-box { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.stepper-btn { width: 26px; height: 26px; border-radius: 7px; background: #262e3a; border: 1px solid #364152; color: #e2e8f0; font-size: 15px; font-weight: 700; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.stepper-qty { min-width: 20px; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 800; color: #ffffff; }
+.empty-tab-items { text-align: center; color: var(--muted-text); font-size: 13px; padding: 14px 6px; }
+.btn-qty { width: 28px; height: 28px; border: none; border-radius: 7px; color: white; cursor: pointer; font-size: 16px; font-weight: bold; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+.btn-del-mini { background: rgba(185, 28, 28, 0.85); color: white; border: none; padding: 4px 7px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 11px; }
+.tab-actions { display: flex; gap: 8px; align-items: stretch; }
+.btn-pay { background: #14b87a; color: #ffffff; border: none; padding: 12px 14px; cursor: pointer; border-radius: 10px; font-weight: 700; font-size: 14px; }
+.device-locked-pay-notice { flex: 1; padding: 10px; border-radius: 9px; background: rgba(185, 28, 28, 0.16); border: 1px dashed rgba(248, 113, 113, 0.55); color: #fca5a5; font-size: 12px; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; }
+.empty-state { text-align: center; padding: 24px 16px; color: var(--muted-text); font-style: italic; background: #14181f; border: 1px solid var(--border-color); border-radius: 13px; margin-bottom: 14px; font-size: 13px; }
+
+/* TABLES */
+.table-card { background: #14181f; padding: 14px; border-radius: 13px; margin-bottom: 12px; border: 1px solid var(--border-color); }
+.table-card-active { border-color: rgba(16, 185, 129, 0.42); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.08); }
+.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.table-header h3 { margin: 0; font-size: 15px; font-weight: 700; }
+.table-status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.status-active { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; }
+.status-paused { background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.45); color: #fbbf24; }
+.status-dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.flat-rate-notice { background: #331621; border: 1px solid #5a2437; color: #fda4af; padding: 9px; border-radius: 9px; text-align: center; font-size: 13px; font-weight: 700; }
+.select-field { width: 100%; padding: 9px 11px; background: #0e1117; color: var(--text-color); border: 1px solid #242c38; border-radius: 9px; font-size: 13px; outline: none; }
+.select-field:disabled { opacity: 0.85; color: #cbd5e1; }
+.mt-half { margin-top: 8px; }
+.table-active-actions { display: flex; gap: 8px; align-items: stretch; }
+.btn-end-game { flex: 1; padding: 10px 12px; border-radius: 9px; background: rgba(153, 27, 27, 0.32); border: 1px solid rgba(225, 29, 72, 0.45); color: #fda4af; font-weight: 700; font-size: 13px; cursor: pointer; }
+.btn-pause-mini { width: 42px; border-radius: 9px; background: #1e242e; border: 1px solid #303949; color: #fbbf24; font-size: 14px; cursor: pointer; }
+.btn-start { background: #14b87a; color: white; border: none; padding: 10px 12px; width: 100%; cursor: pointer; border-radius: 9px; font-weight: 700; font-size: 13px; }
+.btn-stop { background: #b91c1c; color: white; border: none; padding: 10px 12px; width: 100%; cursor: pointer; border-radius: 9px; font-weight: 700; font-size: 13px; }
+.btn-warn { background: #d97706; color: white; border: none; padding: 10px 12px; width: 100%; cursor: pointer; border-radius: 9px; font-weight: 700; font-size: 13px; }
 
 /* ADMIN MODAL WINDOW */
 .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000; }

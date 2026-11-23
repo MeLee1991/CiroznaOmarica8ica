@@ -157,11 +157,10 @@ code {
 }
 
 #app {
-  width: 1126px;
+  width: 100%;
   max-width: 100%;
-  margin: 0 auto;
+  margin: 0;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
@@ -294,31 +293,6 @@ code {
     border-right-color: var(--border);
   }
 }
-/* Prenovljen stil seznama igralcev */
-.user-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: #2b2b36;
-  border-radius: 8px;
-  border-left: 4px solid transparent;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-@media (hover: hover) and (pointer: fine) {
-  .user-item:hover { background: #3a3a4a; }
-}
-.selected-user { 
-  background: #3e503e !important; 
-  border-left: 4px solid #4caf50; 
-}
-.user-info { display: flex; flex-direction: column; }
-.user-badge { font-size: 10px; color: #aaa; text-transform: uppercase; }
-.user-actions { display: flex; align-items: center; gap: 10px; }
-.debt-warning { color: #ff5252; font-weight: bold; font-size: 13px; }
-
 /* Avtorski žig na dnu zaslona - izboljšana verzija */
 .watermark {
   position: fixed;
