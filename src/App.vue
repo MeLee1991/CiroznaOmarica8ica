@@ -2719,12 +2719,70 @@ const resetAdminPassword = async () => {
   --bg-color: #e5e9ef;
   --panel-bg: #ffffff;
   --text-color: #161b22;
-  --muted-text: #656d76;
+  --muted-text: #57606a;
   --border-color: #d0d7de;
   --input-bg: #f6f8fa;
   --item-bg: #f3f5f8;
   --emerald: #10b981;
   --emerald-bright: #059669;
+}
+
+/* LIGHT MODE ONLY OVERRIDES (Dark mode remains completely untouched) */
+.kiosk-container.light .panel { box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); }
+.kiosk-container.light .count-pill { background: #eef2f6; border-color: #d0d7de; color: #334155; }
+.kiosk-container.light .btn-header-admin { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+.kiosk-container.light .btn-header-admin.admin-unlocked { background: rgba(16, 185, 129, 0.14); border-color: #10b981; color: #047857; }
+.kiosk-container.light .btn-header-lock { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.kiosk-container.light .quick-add,
+.kiosk-container.light .victim-sort-box,
+.kiosk-container.light .tab-card,
+.kiosk-container.light .table-card,
+.kiosk-container.light .empty-state { background: #f8fafc; border-color: #d8dee6; }
+.kiosk-container.light .segmented-group,
+.kiosk-container.light .victim-sort-grid { background: #e2e8f0; border-color: #cbd5e1; }
+.kiosk-container.light .seg-btn,
+.kiosk-container.light .victim-sort-btn { color: #475569; }
+.kiosk-container.light .seg-btn.active,
+.kiosk-container.light .victim-sort-btn.active { background: #ffffff; border-color: #cbd5e1; color: #0f172a; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+.kiosk-container.light .victim-sort-btn.active { border-color: #10b981; color: #047857; }
+.kiosk-container.light .user-item { background: #f8fafc; border-color: #d8dee6; color: #0f172a; }
+.kiosk-container.light .selected-user { background: #ecfdf5 !important; border-color: #10b981 !important; color: #064e3b !important; }
+.kiosk-container.light .user-name-text { color: #0f172a; }
+.kiosk-container.light .selected-user .user-name-text { color: #064e3b; }
+.kiosk-container.light .badge-clan { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+.kiosk-container.light .badge-neclan { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
+.kiosk-container.light .debt-pill-pos { background: #d1fae5; border-color: #6ee7b7; color: #047857; }
+.kiosk-container.light .debt-pill-neg { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+.kiosk-container.light .btn-icon { background: #e2e8f0; border-color: #cbd5e1; color: #0f172a; }
+.kiosk-container.light .cat-title-box { background: #eef2f6; border-color: #d0d7de; }
+.kiosk-container.light .cat-title-box h3 { color: #0369a1; }
+.kiosk-container.light .cat-theme-wine .cat-title-box h3 { color: #be123c; }
+.kiosk-container.light .btn-drink { background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%); border-color: #93c5fd; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.07); }
+.kiosk-container.light .btn-drink.cat-theme-wine { background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%); border-color: #fda4af; }
+.kiosk-container.light .drink-name { color: #0f172a; }
+.kiosk-container.light .drink-price-pill { background: #ffffff; border-color: #93c5fd; color: #0369a1; }
+.kiosk-container.light .cat-theme-wine .drink-price-pill { background: #ffffff; border-color: #fda4af; color: #be123c; }
+.kiosk-container.light .member-price-tag { color: #334155; }
+.kiosk-container.light .middle-scroll-fab { background: #ffffff; border-color: #cbd5e1; color: #0f172a; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14); }
+.kiosk-container.light .btn-tariff-mode { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+.kiosk-container.light .btn-tariff-mode.active-discount { background: #fee2e2; border-color: #ef4444; color: #991b1b; }
+.kiosk-container.light .tab-card-header { border-bottom-color: #e2e8f0; }
+.kiosk-container.light .role-clan { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+.kiosk-container.light .role-neclan { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
+.kiosk-container.light .order-row { background: #ffffff; border-color: #e2e8f0; }
+.kiosk-container.light .order-name { color: #0f172a; }
+.kiosk-container.light .stepper-btn { background: #eef2f6; border-color: #cbd5e1; color: #0f172a; }
+.kiosk-container.light .stepper-qty { color: #0f172a; }
+.kiosk-container.light .custom-charge-row { background: #ffffff; border-color: #cbd5e1; }
+.kiosk-container.light .select-field { background: #ffffff; border-color: #cbd5e1; color: #0f172a; }
+.kiosk-container.light .select-field:disabled { color: #475569; background: #f1f5f9; }
+.kiosk-container.light .btn-end-game { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+.kiosk-container.light .btn-pause-mini { background: #f1f5f9; border-color: #cbd5e1; color: #b45309; }
+.kiosk-container.light .status-active { background: #d1fae5; border-color: #6ee7b7; color: #047857; }
+.kiosk-container.light .status-paused { background: #fef3c7; border-color: #fcd34d; color: #b45309; }
+.kiosk-container.light .device-locked-pay-notice { background: #fee2e2; border-color: #f87171; color: #991b1b; }
+@media (hover: none), (pointer: coarse) {
+  .kiosk-container.light .selected-user:hover { background: #ecfdf5 !important; }
 }
 
 /* GLOBAL & LAYOUT */
