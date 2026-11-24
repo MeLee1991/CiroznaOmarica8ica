@@ -53,6 +53,21 @@
           Zakleni Admin (To user)
         </button>
       </div>
+
+      <div class="victim-sort-box">
+        <div class="victim-sort-label">Razvrsti žrtve</div>
+        <div class="victim-sort-grid">
+          <button @click="setVictimSortMode('alpha')" :class="['victim-sort-btn', { active: ui.victimSortMode === 'alpha' }]" title="Vsi po abecedi (A–Ž)">
+            A–Ž (Vsi)
+          </button>
+          <button @click="setVictimSortMode('clan_first')" :class="['victim-sort-btn', { active: ui.victimSortMode === 'clan_first' }]" title="Najprej Člani (A–Ž), nato Nečlani (A–Ž)">
+            Č → N
+          </button>
+          <button @click="setVictimSortMode('neclan_first')" :class="['victim-sort-btn', { active: ui.victimSortMode === 'neclan_first' }]" title="Najprej Nečlani (A–Ž), nato Člani (A–Ž)">
+            N → Č
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- 2. MIDDLE COLUMN: CIROZNA OMARICA -->
@@ -1204,6 +1219,7 @@ const defaultUI = {
   btnBgColor: '#3a3a48',
   victimFontSize: '14px',
   victimBold: true,
+  victimSortMode: 'alpha',
   drinkNameFontSize: '15px',
   drinkPriceFontSize: '14px',
   drinkNameBold: true,
@@ -1981,11 +1997,27 @@ const editUser = async (u) => {
   if(n && n.trim() !== '') { await supabase.from('users').update({ ime: n }).eq('id', u.id); u.ime = n; } 
 }
 
+const setVictimSortMode = (mode) => {
+  ui.victimSortMode = mode
+  localStorage.setItem('ciroznaUI', JSON.stringify(ui))
+}
+
 const sortedUsers = computed(() => {
-  return [...users.value].filter(u => normalizedText(u.ime).toLowerCase().includes(search.value.toLowerCase())).sort((a,b) => {
-        const debtA = getUserDebt(a.id), debtB = getUserDebt(b.id)
-        if((debtA !== 0) !== (debtB !== 0)) return debtA !== 0 ? -1 : 1
-        return normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' }) 
+  const mode = ui.victimSortMode || 'alpha'
+  return [...users.value]
+    .filter(u => normalizedText(u.ime).toLowerCase().includes(search.value.toLowerCase()))
+    .sort((a, b) => {
+      const debtA = getUserDebt(a.id), debtB = getUserDebt(b.id)
+      if ((debtA !== 0) !== (debtB !== 0)) return debtA !== 0 ? -1 : 1
+      if (mode === 'clan_first' || mode === 'neclan_first') {
+        const aIsClan = a.tip === 'član'
+        const bIsClan = b.tip === 'član'
+        if (aIsClan !== bIsClan) {
+          if (mode === 'clan_first') return aIsClan ? -1 : 1
+          return aIsClan ? 1 : -1
+        }
+      }
+      return normalizedText(a.ime).localeCompare(normalizedText(b.ime), 'sl', { sensitivity: 'base' })
     })
 })
 
@@ -2731,6 +2763,11 @@ h2, h3, h4 { color: var(--text-color); margin-top: 0; }
 .btn-toggle.active { background: #10b981; border-color: #10b981; color: white;}
 .btn-add-main { width: 100%; padding: 10px 12px; background: #14b87a; border: none; color: #ffffff; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; }
 .admin-mode-switch { margin-top: 16px; display: grid; grid-template-columns: 1fr; gap: 8px; padding: 8px; border: 1px solid rgba(16,185,129,0.45); border-radius: 10px; background: rgba(16,185,129,0.09); }
+.victim-sort-box { margin-top: 10px; padding: 8px; border: 1px solid var(--border-color); border-radius: 10px; background: #14181f; }
+.victim-sort-label { font-size: 11px; font-weight: 700; color: var(--muted-text); text-transform: uppercase; letter-spacing: 0.06em; text-align: center; margin-bottom: 6px; }
+.victim-sort-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: #0c0f13; border: 1px solid var(--border-color); border-radius: 8px; padding: 3px; }
+.victim-sort-btn { padding: 7px 4px; background: transparent; color: var(--muted-text); border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 11px; white-space: nowrap; }
+.victim-sort-btn.active { background: #1c2430; border-color: rgba(16, 185, 129, 0.55); color: var(--emerald-bright); }
 .mode-status { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--emerald-bright); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .mode-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--emerald); }
 .btn-mode-main, .btn-admin-main { width: 100%; border: none; color: white; border-radius: 8px; cursor: pointer; font-weight: 800; }
